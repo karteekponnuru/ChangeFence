@@ -1,0 +1,62 @@
+{
+  "scenario": "coding-production-deploy",
+  "title": "Coding agent → production deploy",
+  "domain": "Production",
+  "change": "+ deploy tool",
+  "plain_english": "Adding the deploy tool makes production deployment directly reachable by the coding agent.",
+  "base_file": "examples/coding-base.yaml",
+  "candidate_file": "examples/coding-candidate.yaml",
+  "result": {
+    "decision": "BLOCK",
+    "decision_reason": "A newly introduced deterministic authority path violates a configured security invariant.",
+    "summary": {
+      "structural_changes": 1,
+      "proven_new_capabilities": 2,
+      "inferred_new_capabilities": 0,
+      "semantic_risks": 0,
+      "targeted_tests": 0,
+      "gate_violations": 1
+    },
+    "proven_findings": [
+      {
+        "id": "CAP-001",
+        "evidence_level": "PROVEN",
+        "kind": "capability_delta",
+        "source_agent": "coding",
+        "capability": "deployment.read",
+        "severity": "low",
+        "path": ["coding", "tool:deploy", "cap:deployment.read"],
+        "reason": "Deterministically reachable in candidate and not reachable in baseline."
+      },
+      {
+        "id": "CAP-002",
+        "evidence_level": "PROVEN",
+        "kind": "capability_delta",
+        "source_agent": "coding",
+        "capability": "production.deploy",
+        "severity": "critical",
+        "path": ["coding", "tool:deploy", "cap:production.deploy"],
+        "reason": "Deterministically reachable in candidate and not reachable in baseline."
+      }
+    ],
+    "gate_violations": [
+      {
+        "id": "PROD-201",
+        "description": "Coding agents must never gain authority to deploy to production.",
+        "source_agent": "coding",
+        "capability": "production.deploy",
+        "severity": "critical",
+        "path": ["coding", "tool:deploy", "cap:production.deploy"],
+        "new_in_candidate": true
+      }
+    ],
+    "structural_changes": [
+      {"type": "tool_added", "agent": "coding", "tool": "deploy", "risk": "review"}
+    ],
+    "evidence_contract": {
+      "PROVEN": "Derived deterministically from declared architecture and reachability.",
+      "HYPOTHESIZED": "LLM-assisted semantic inference; requires human review or runtime verification.",
+      "VERIFIED": "Reserved for evidence returned by an external execution/evaluation harness."
+    }
+  }
+}
