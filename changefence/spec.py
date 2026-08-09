@@ -1,8 +1,9 @@
 from pathlib import Path
 import yaml
-from .models import Agent, Capability, Invariant, SystemSpec, Tool
+from .models import Agent, Capability, Invariant, ReviewRule, SystemSpec, Tool
 
 ALLOWED_SEVERITIES = {"low", "medium", "high", "critical"}
+ALLOWED_EVIDENCE = {"*", "UNKNOWN", "PROVEN", "HYPOTHESIZED", "VERIFIED"}
 
 
 class SpecError(ValueError):
@@ -25,6 +26,34 @@ def _parse_capability(item) -> Capability:
         name=str(item["name"]),
         severity=_severity(item.get("severity")),
         description=str(item.get("description", "")),
+    )
+
+
+def _parse_review_rule(item) -> ReviewRule:
+    if not isinstance(item, dict) or not item.get("id"):
+        raise SpecError("Each review rule requires an id.")
+    match = item.get("match", {}) or {}
+    require = item.get("require", {}) or {}
+    evidence = str(match.get("evidence", "*")).upper()
+    if evidence not in ALLOWED_EVIDENCE:
+        raise SpecError(
+            f"Review rule '{item['id']}' has unsupported evidence '{evidence}'. "
+            "Use *, UNKNOWN, PROVEN, HYPOTHESIZED, or VERIFIED."
+        )
+    expires_minutes = int(require.get("expires_minutes", 15))
+    max_uses = int(require.get("max_uses", 1))
+    if expires_minutes <= 0 or max_uses <= 0:
+        raise SpecError(f"Review rule '{item['id']}' requires positive expires_minutes and max_uses.")
+    return ReviewRule(
+        id=str(item["id"]),
+        origin_agent=str(match.get("origin", "*")),
+        capability=str(match.get("capability", "*")),
+        severity_at_least=_severity(match.get("severity_at_least"), "low"),
+        evidence=evidence,
+        approver=str(require.get("approver", "security")),
+        expires_minutes=expires_minutes,
+        max_uses=max_uses,
+        reason=str(require.get("reason", "Security review required before execution.")),
     )
 
 
@@ -71,11 +100,14 @@ def load_spec(path: str | Path) -> SystemSpec:
             )
         )
 
+    review_rules = [_parse_review_rule(item) for item in raw.get("reviews", [])]
+
     spec = SystemSpec(
         name=str(raw.get("system", path.stem)),
         agents=agents,
         tools=tools,
         invariants=invariants,
+        review_rules=review_rules,
     )
     validate_spec(spec)
     return spec
@@ -93,3 +125,7 @@ def validate_spec(spec: SystemSpec) -> None:
     for inv in spec.invariants:
         if inv.source_agent not in spec.agents:
             raise SpecError(f"Invariant '{inv.id}' references unknown agent '{inv.source_agent}'.")
+
+    for rule in spec.review_rules:
+        if rule.origin_agent != "*" and rule.origin_agent not in spec.agents:
+            raise SpecError(f"Review rule '{rule.id}' references unknown origin agent '{rule.origin_agent}'.")
