@@ -1,6 +1,6 @@
-name: ChangeFence Agent Security Impact
+name: ChangeFence Impact
 
-description: Translate AI-agent release changes into security capability consequences.
+description: Analyze AI-agent changes and block newly introduced authority that violates configured security invariants.
 author: Karteek Ponnuru
 
 inputs:
