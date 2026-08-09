@@ -19,87 +19,108 @@ jobs:
       - run: python -m pip install -e ".[dev]"
       - run: pytest
 
-      - name: Verify unsafe Impact example is blocked
+      - name: Verify security-owned policy blocks developer-only agent change
         shell: bash
         run: |
           set +e
-          changefence impact examples/procurement-base.yaml examples/procurement-candidate.yaml
+          changefence impact \
+            examples/procurement-agents-base.yaml \
+            examples/procurement-agents-candidate.yaml \
+            --policy examples/acme-security-policy.yaml
           code=$?
           set -e
           test "$code" -eq 1
 
-      - name: Verify safe Impact example passes
-        run: changefence impact examples/procurement-base.yaml examples/procurement-safe-candidate.yaml
-
-      - name: Verify Runtime review routing
+      - name: Verify Runtime review comes from external policy
         shell: bash
         run: |
           set +e
-          changefence runtime examples/procurement-review.yaml procurement supplier.bank_account.write
+          changefence runtime \
+            examples/procurement-agents-base.yaml \
+            procurement \
+            supplier.bank_account.write \
+            --policy examples/acme-security-policy.yaml
           code=$?
           set -e
           test "$code" -eq 3
 
-      - name: Verify signed one-use approval lease lifecycle
+      - name: Verify signed one-use approval lease with external policy
         shell: bash
         env:
           CHANGEFENCE_APPROVAL_SECRET: changefence-ci-secret-that-is-longer-than-thirty-two-bytes
         run: |
           rm -f /tmp/changefence-approval.json /tmp/changefence-usage.json
           changefence approve \
-            examples/procurement-review.yaml \
+            examples/procurement-agents-base.yaml \
             procurement \
             supplier.bank_account.write \
+            --policy examples/acme-security-policy.yaml \
             --approved-by ci-reviewer@example.com \
             --approver-group procurement-security \
             --context '{"workflow":"ci"}' \
             --out /tmp/changefence-approval.json
 
           changefence approval-verify \
-            examples/procurement-review.yaml \
+            examples/procurement-agents-base.yaml \
             procurement \
             supplier.bank_account.write \
             /tmp/changefence-approval.json \
+            --policy examples/acme-security-policy.yaml \
             --usage-store /tmp/changefence-usage.json
 
           changefence runtime \
-            examples/procurement-review.yaml \
+            examples/procurement-agents-base.yaml \
             procurement \
             supplier.bank_account.write \
+            --policy examples/acme-security-policy.yaml \
             --lease /tmp/changefence-approval.json \
             --usage-store /tmp/changefence-usage.json
 
           set +e
           changefence runtime \
-            examples/procurement-review.yaml \
+            examples/procurement-agents-base.yaml \
             procurement \
             supplier.bank_account.write \
+            --policy examples/acme-security-policy.yaml \
             --lease /tmp/changefence-approval.json \
             --usage-store /tmp/changefence-usage.json
           code=$?
           set -e
           test "$code" -eq 3
 
-      - name: Verify Runtime invariant block cannot be approved around
+      - name: Verify hard invariant cannot be approved around
         shell: bash
         run: |
           set +e
-          changefence runtime examples/procurement-candidate.yaml procurement payment.execute --executor finance
+          changefence runtime \
+            examples/procurement-agents-candidate.yaml \
+            procurement \
+            payment.execute \
+            --executor finance \
+            --policy examples/acme-security-policy.yaml
           code=$?
           set -e
           test "$code" -eq 1
 
-      - name: Verify Policy plan generation
-        run: changefence policy examples/procurement-base.yaml examples/procurement-candidate.yaml --json
+      - name: Verify Policy plan generation uses external ground truth
+        run: |
+          changefence policy \
+            examples/procurement-agents-base.yaml \
+            examples/procurement-agents-candidate.yaml \
+            --policy examples/acme-security-policy.yaml \
+            --json
 
       - name: Verify published demo data matches the engine
         run: python scripts/generate_demo_results.py --check
 
-      - name: Verify lower-level compare remains backward compatible
+      - name: Verify legacy combined specs remain backward compatible
         shell: bash
         run: |
           set +e
+          changefence impact examples/procurement-base.yaml examples/procurement-candidate.yaml
+          impact_code=$?
           changefence compare examples/procurement-base.yaml examples/procurement-candidate.yaml
-          code=$?
+          compare_code=$?
           set -e
-          test "$code" -eq 1
+          test "$impact_code" -eq 1
+          test "$compare_code" -eq 1
