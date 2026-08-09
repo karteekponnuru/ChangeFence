@@ -189,3 +189,91 @@ def decide_action(
         "evidence_level": "PROVEN",
         "path": list(item.path),
     }
+
+
+def authorize_action(
+    spec: SystemSpec,
+    *,
+    origin_agent: str,
+    capability: str,
+    executor_agent: str | None = None,
+    approval_lease: dict | None = None,
+    approval_secret: str | bytes | None = None,
+    usage_path=None,
+    now=None,
+    consume: bool = True,
+) -> dict:
+    """Evaluate an action and satisfy REVIEW only with a valid scoped lease.
+
+    A hard invariant can never be overridden. Unknown/unmodeled authority also
+    cannot be upgraded to ALLOW by a lease. A usage store is required when a
+    lease is consumed so one-time approvals are replay-safe.
+    """
+    decision = decide_action(
+        spec,
+        origin_agent=origin_agent,
+        capability=capability,
+        executor_agent=executor_agent,
+    )
+    if decision["decision"] != "REVIEW" or approval_lease is None:
+        return decision
+    if approval_secret is None:
+        return {
+            **decision,
+            "lease_validation": {
+                "valid": False,
+                "reason": "Approval secret is required to validate a lease.",
+            },
+        }
+
+    from .approvals import consume_approval_lease, validate_approval_lease
+
+    if consume:
+        if usage_path is None:
+            return {
+                **decision,
+                "lease_validation": {
+                    "valid": False,
+                    "reason": "A usage store is required to consume approval leases safely.",
+                },
+            }
+        validation = consume_approval_lease(
+            spec,
+            decision,
+            approval_lease,
+            secret=approval_secret,
+            usage_path=usage_path,
+            now=now,
+        )
+    else:
+        validation = validate_approval_lease(
+            spec,
+            decision,
+            approval_lease,
+            secret=approval_secret,
+            usage_path=usage_path,
+            now=now,
+        )
+
+    if not validation.get("valid"):
+        return {**decision, "lease_validation": validation}
+
+    return {
+        **decision,
+        "decision": "ALLOW",
+        "reason": "Configured human review satisfied by a valid scoped approval lease.",
+        "review": None,
+        "authorization": {
+            "type": "APPROVAL_LEASE",
+            "lease_id": validation["lease_id"],
+            "rule_id": validation["rule_id"],
+            "approved_by": validation["approved_by"],
+            "approver_group": validation["approver_group"],
+            "expires_at": validation["expires_at"],
+            "uses": validation["uses"],
+            "max_uses": validation["max_uses"],
+            "uses_remaining": validation["uses_remaining"],
+            "context": validation.get("context", {}),
+        },
+        "lease_validation": validation,
+    }
