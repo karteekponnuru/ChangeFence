@@ -3,6 +3,7 @@ import json
 import sys
 from .behavior import BehaviorError, compare_behavior
 from .engine import compare
+from .hypotheses import HypothesisError, generate_attack_hypotheses
 from .report import write_html
 from .spec import SpecError, load_spec
 
@@ -73,6 +74,18 @@ def main():
     report_parser.add_argument("--threshold", type=float, default=0.20)
     report_parser.add_argument("--out", default="changefence-report.html")
 
+    hyp_parser = sub.add_parser(
+        "hypothesize",
+        help="Generate local-LLM attack hypotheses and verify them deterministically",
+    )
+    hyp_parser.add_argument("base")
+    hyp_parser.add_argument("candidate")
+    hyp_parser.add_argument("--model", default="gemma3")
+    hyp_parser.add_argument("--url", default="http://localhost:11434")
+    hyp_parser.add_argument("--count", type=int, default=6)
+    hyp_parser.add_argument("--timeout", type=int, default=120)
+    hyp_parser.add_argument("--json", action="store_true", dest="as_json")
+
     args = parser.parse_args()
 
     try:
@@ -86,6 +99,33 @@ def main():
             print(json.dumps(report, indent=2)) if args.as_json else _print_behavior(report)
             raise SystemExit(1 if report["status"] == "FAIL" else 0)
 
+        if args.command == "hypothesize":
+            base = load_spec(args.base)
+            candidate = load_spec(args.candidate)
+            report = generate_attack_hypotheses(
+                base,
+                candidate,
+                model=args.model,
+                count=args.count,
+                base_url=args.url,
+                timeout=args.timeout,
+            )
+            if args.as_json:
+                print(json.dumps(report, indent=2))
+            else:
+                print("CHANGEFENCE LOCAL ATTACK HYPOTHESES")
+                print(f"Model: {report['model']}")
+                print(f"Generated: {report['summary']['generated']}")
+                print(f"Verified new: {report['summary']['verified_new']}")
+                print(f"Unreachable: {report['summary']['unreachable']}")
+                for h in report["hypotheses"]:
+                    print(f"\n[{h['verification']}] {h['id']} — {h['title']}")
+                    print(f"Check: {h['source_agent']} -> {h['target_capability']}")
+                    print(f"Hypothesis: {h['rationale']}")
+                    if h["evidence_path"]:
+                        print(f"Verified path: {_render_path(h['evidence_path'])}")
+            raise SystemExit(0)
+
         if args.command == "report":
             structural = _load_compare(args.base, args.candidate, args.fail_on)
             behavior = None
@@ -97,7 +137,7 @@ def main():
             print(f"ChangeFence report written to {path}")
             combined_fail = structural["status"] == "FAIL" or (behavior and behavior["status"] == "FAIL")
             raise SystemExit(1 if combined_fail else 0)
-    except (SpecError, BehaviorError) as exc:
+    except (SpecError, BehaviorError, HypothesisError) as exc:
         print(f"ChangeFence error: {exc}", file=sys.stderr)
         raise SystemExit(2)
 
