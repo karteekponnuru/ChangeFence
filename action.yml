@@ -1,6 +1,6 @@
 name: ChangeFence Impact
 
-description: Analyze AI-agent changes and block newly introduced authority that violates configured security invariants.
+description: Analyze AI-agent changes against security-owned policy and block newly introduced forbidden authority.
 author: Karteek Ponnuru
 
 inputs:
@@ -10,6 +10,10 @@ inputs:
   candidate:
     description: Path to the candidate ChangeFence agent spec
     required: true
+  policy:
+    description: Optional path to the security-owned ChangeFence policy registry. When set, this is the authoritative source of invariants and review rules.
+    required: false
+    default: ""
   fail-on:
     description: Minimum invariant severity that blocks the build
     required: false
@@ -23,7 +27,16 @@ runs:
       run: python3 -m pip install "$GITHUB_ACTION_PATH"
     - name: Analyze agent security change impact
       shell: bash
-      run: changefence impact "${{ inputs.baseline }}" "${{ inputs.candidate }}" --fail-on "${{ inputs.fail-on }}"
+      run: |
+        POLICY_ARGS=()
+        if [[ -n "${{ inputs.policy }}" ]]; then
+          POLICY_ARGS=(--policy "${{ inputs.policy }}")
+        fi
+        changefence impact \
+          "${{ inputs.baseline }}" \
+          "${{ inputs.candidate }}" \
+          "${POLICY_ARGS[@]}" \
+          --fail-on "${{ inputs.fail-on }}"
 
 branding:
   icon: shield
