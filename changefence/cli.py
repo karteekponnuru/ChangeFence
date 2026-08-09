@@ -1,10 +1,15 @@
 import argparse
 import json
 import sys
+from pathlib import Path
+
 from .behavior import BehaviorError, compare_behavior
+from .descriptors import DescriptorError, build_descriptor_context
 from .engine import compare
 from .hypotheses import HypothesisError, generate_attack_hypotheses
+from .impact import build_impact_report, write_promptfoo_tests
 from .report import write_html
+from .semantic import SemanticError
 from .spec import SpecError, load_spec
 
 
@@ -23,17 +28,15 @@ def _print_structural(report):
     print()
     print(f"Security gate: {report['status']}")
     s = report["summary"]
-    print(f"Structural changes:       {s['structural_changes']}")
+    print(f"Structural changes: {s['structural_changes']}")
     print(f"New reachable capabilities: {s['new_capabilities']}")
     print(f"New security regressions: {s['new_security_regressions']}")
-
     if report["new_security_regressions"]:
         print("\nNEW SECURITY REGRESSIONS")
         for v in report["new_security_regressions"]:
             print(f"\n[{v['severity'].upper()}] {v['id']} — {v['description']}")
             print(f"New authority: {v['source_agent']} -> {v['capability']}")
             print(f"Path: {_render_path(v['path'])}")
-
     if report["new_capabilities"]:
         print("\nNEW CAPABILITY SURFACE")
         for item in report["new_capabilities"]:
@@ -49,6 +52,47 @@ def _print_behavior(report):
         print(f"- {row['scenario']}: {row['base']['pass_rate']:.0%} -> {row['candidate']['pass_rate']:.0%}")
 
 
+def _print_impact(report):
+    print("CHANGEFENCE SECURITY CHANGE IMPACT")
+    print(f"Baseline:  {report['base']}")
+    print(f"Candidate: {report['candidate']}")
+    print(f"Decision:  {report['decision']}")
+    print(f"Reason:    {report['decision_reason']}")
+    s = report["summary"]
+    print()
+    print(f"Structural changes:         {s['structural_changes']}")
+    print(f"PROVEN new capabilities:   {s['proven_new_capabilities']}")
+    print(f"HYPOTHESIZED capabilities: {s['inferred_new_capabilities']}")
+    print(f"Semantic risks:             {s['semantic_risks']}")
+    print(f"Targeted tests generated:   {s['targeted_tests']}")
+    if report["proven_findings"]:
+        print("\nPROVEN CAPABILITY DELTA")
+        for item in report["proven_findings"]:
+            print(f"- [{item['severity'].upper()}] {item['source_agent']} -> {item['capability']}")
+            print(f"  path: {_render_path(item['path'])}")
+    if report["inferred_findings"]:
+        print("\nHYPOTHESIZED CAPABILITY DELTA")
+        for item in report["inferred_findings"]:
+            print(f"- [{item['severity'].upper()}] {item['source_agent']} -> {item['capability']}")
+            print("  requires mapping review")
+    semantic = report.get("semantic") or {}
+    if semantic.get("semantic_risks"):
+        print("\nSEMANTIC RISKS — REQUIRE RUNTIME VERIFICATION")
+        for risk in semantic["semantic_risks"]:
+            print(f"- [{risk['severity'].upper()}] {risk['agent']} / {risk['affected_capability']}")
+            print(f"  {risk['rationale']}")
+    if report["targeted_attacks"]:
+        print("\nCHANGE-DIRECTED TESTS")
+        for attack in report["targeted_attacks"]:
+            print(f"- {attack['id']} {attack['title']} -> {attack['target_capability']}")
+
+
+def _read_optional(path):
+    if not path:
+        return ""
+    return Path(path).read_text(encoding="utf-8")
+
+
 def main():
     parser = argparse.ArgumentParser(prog="changefence", description="Security change control for AI agents")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -58,6 +102,21 @@ def main():
     cmp_parser.add_argument("candidate")
     cmp_parser.add_argument("--fail-on", choices=["low", "medium", "high", "critical"], default="high")
     cmp_parser.add_argument("--json", action="store_true", dest="as_json")
+
+    impact_parser = sub.add_parser("impact", help="Translate an agent change into security consequences")
+    impact_parser.add_argument("base")
+    impact_parser.add_argument("candidate")
+    impact_parser.add_argument("--diff", help="Unified diff or PR patch file for semantic analysis")
+    impact_parser.add_argument("--context", help="Optional repository/tool/API context file")
+    impact_parser.add_argument("--descriptor", action="append", default=[], help="OpenAPI or MCP-style JSON/YAML descriptor; repeat as needed")
+    impact_parser.add_argument("--llm", action="store_true", help="Use local Ollama for semantic compilation and targeted test generation")
+    impact_parser.add_argument("--model", default="gemma3")
+    impact_parser.add_argument("--url", default="http://localhost:11434")
+    impact_parser.add_argument("--timeout", type=int, default=120)
+    impact_parser.add_argument("--attacks", type=int, default=6)
+    impact_parser.add_argument("--fail-on", choices=["low", "medium", "high", "critical"], default="high")
+    impact_parser.add_argument("--promptfoo-out", help="Write generated targeted tests as Promptfoo external-tests YAML")
+    impact_parser.add_argument("--json", action="store_true", dest="as_json")
 
     beh_parser = sub.add_parser("behavior-diff", help="Compare adversarial test results between releases")
     beh_parser.add_argument("base")
@@ -74,10 +133,7 @@ def main():
     report_parser.add_argument("--threshold", type=float, default=0.20)
     report_parser.add_argument("--out", default="changefence-report.html")
 
-    hyp_parser = sub.add_parser(
-        "hypothesize",
-        help="Generate local-LLM attack hypotheses and verify them deterministically",
-    )
+    hyp_parser = sub.add_parser("hypothesize", help="Generate local-LLM attack hypotheses and verify them deterministically")
     hyp_parser.add_argument("base")
     hyp_parser.add_argument("candidate")
     hyp_parser.add_argument("--model", default="gemma3")
@@ -87,29 +143,39 @@ def main():
     hyp_parser.add_argument("--json", action="store_true", dest="as_json")
 
     args = parser.parse_args()
-
     try:
         if args.command == "compare":
             report = _load_compare(args.base, args.candidate, args.fail_on)
             print(json.dumps(report, indent=2)) if args.as_json else _print_structural(report)
             raise SystemExit(1 if report["status"] == "FAIL" else 0)
-
+        if args.command == "impact":
+            base = load_spec(args.base)
+            candidate = load_spec(args.candidate)
+            report = build_impact_report(
+                base,
+                candidate,
+                diff_text=_read_optional(args.diff),
+                repository_context="\n".join(x for x in [_read_optional(args.context), build_descriptor_context(args.descriptor)] if x),
+                fail_on=args.fail_on,
+                use_llm=args.llm,
+                model=args.model,
+                base_url=args.url,
+                timeout=args.timeout,
+                attack_count=args.attacks,
+            )
+            if args.promptfoo_out:
+                path = write_promptfoo_tests(args.promptfoo_out, report["targeted_attacks"])
+                report["promptfoo_tests_file"] = str(path)
+            print(json.dumps(report, indent=2)) if args.as_json else _print_impact(report)
+            raise SystemExit(1 if report["decision"] == "BLOCK" else 0)
         if args.command == "behavior-diff":
             report = compare_behavior(args.base, args.candidate, threshold=args.threshold)
             print(json.dumps(report, indent=2)) if args.as_json else _print_behavior(report)
             raise SystemExit(1 if report["status"] == "FAIL" else 0)
-
         if args.command == "hypothesize":
             base = load_spec(args.base)
             candidate = load_spec(args.candidate)
-            report = generate_attack_hypotheses(
-                base,
-                candidate,
-                model=args.model,
-                count=args.count,
-                base_url=args.url,
-                timeout=args.timeout,
-            )
+            report = generate_attack_hypotheses(base, candidate, model=args.model, count=args.count, base_url=args.url, timeout=args.timeout)
             if args.as_json:
                 print(json.dumps(report, indent=2))
             else:
@@ -125,7 +191,6 @@ def main():
                     if h["evidence_path"]:
                         print(f"Verified path: {_render_path(h['evidence_path'])}")
             raise SystemExit(0)
-
         if args.command == "report":
             structural = _load_compare(args.base, args.candidate, args.fail_on)
             behavior = None
@@ -137,7 +202,7 @@ def main():
             print(f"ChangeFence report written to {path}")
             combined_fail = structural["status"] == "FAIL" or (behavior and behavior["status"] == "FAIL")
             raise SystemExit(1 if combined_fail else 0)
-    except (SpecError, BehaviorError, HypothesisError) as exc:
+    except (SpecError, BehaviorError, HypothesisError, SemanticError, DescriptorError, OSError) as exc:
         print(f"ChangeFence error: {exc}", file=sys.stderr)
         raise SystemExit(2)
 
