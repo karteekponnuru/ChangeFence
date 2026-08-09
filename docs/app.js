@@ -70,6 +70,13 @@ async function loadImpact(){
 }
 document.getElementById('runExample').addEventListener('click',loadImpact);
 
+function renderRuntimeApproved(target){
+  const r=suiteControls.runtime_authorized;
+  const a=r.authorization;
+  target.innerHTML=`<h3>Runtime · approval consumed</h3><p>The configured review was satisfied by a signed lease scoped to this exact authority path. The lease was consumed atomically.</p><div class="detail-card"><div class="row"><span>Actual decision</span><span class="status ok">${r.decision}</span></div><div class="row"><span>Authorization</span><span class="code">${a.type}</span></div><div class="row"><span>Approved by</span><span>${a.approved_by}</span></div><div class="row"><span>Reviewer group</span><span>${a.approver_group}</span></div><div class="row"><span>Lease</span><span class="code">${a.lease_id}</span></div><div class="row"><span>Scope</span><span class="code">${r.origin_agent} → ${r.capability}</span></div><div class="row"><span>Remaining uses</span><span>${a.uses_remaining}</span></div><div class="row"><span>Expires</span><span class="code">${a.expires_at}</span></div></div><button class="btn" id="showReviewState">Show pre-approval state</button>`;
+  document.getElementById('showReviewState').addEventListener('click',()=>renderSuite('runtime'));
+}
+
 function renderSuite(module){
   document.querySelectorAll('.suite-btn').forEach(b=>b.classList.toggle('active',b.dataset.module===module));
   const target=document.getElementById('suiteDetail');
@@ -79,8 +86,9 @@ function renderSuite(module){
   }
   if(!suiteControls){target.innerHTML='<h3>Loading module evidence…</h3><p>The demo is fetching the suite artifact generated from the repository implementation.</p>';return;}
   if(module==='runtime'){
-    const r=suiteControls.runtime_review,rev=r.review;
-    target.innerHTML=`<h3>Runtime</h3><p>A pre-action control for custom/local agents. Hard invariants block; configurable rules can require a human owner.</p><div class="detail-card"><div class="row"><span>Actual decision</span><span class="status review">${r.decision}</span></div><div class="row"><span>Causal origin</span><span class="code">${r.origin_agent}</span></div><div class="row"><span>Capability</span><span class="code">${r.capability}</span></div><div class="row"><span>Reviewer</span><span>${rev.approver}</span></div><div class="row"><span>Approval scope</span><span>${rev.max_uses} use · ${rev.expires_minutes} min</span></div></div>`;
+    const r=suiteControls.runtime_review,rev=r.review,lease=suiteControls.approval_lease;
+    target.innerHTML=`<h3>Runtime · human review</h3><p>A pre-action control for custom/local agents. This action is reachable, but the configured rule requires a reviewer before execution.</p><div class="detail-card"><div class="row"><span>Actual decision</span><span class="status review">${r.decision}</span></div><div class="row"><span>Causal origin</span><span class="code">${r.origin_agent}</span></div><div class="row"><span>Capability</span><span class="code">${r.capability}</span></div><div class="row"><span>Required reviewer</span><span>${rev.approver}</span></div><div class="row"><span>Approval scope</span><span>${rev.max_uses} use · ${rev.expires_minutes} min</span></div><div class="row"><span>Generated lease</span><span class="code">${lease.lease_id}</span></div><div class="row"><span>Path-bound</span><span>yes · signed</span></div></div><button class="btn primary" id="showLeaseFlow">Apply engine-generated approval lease</button><p class="muted-note">Demo lease uses a fixed non-production key so CI can reproduce this exact artifact.</p>`;
+    document.getElementById('showLeaseFlow').addEventListener('click',()=>renderRuntimeApproved(target));
     return;
   }
   if(module==='policy'){
@@ -95,7 +103,7 @@ function renderSuite(module){
   }
   if(module==='ledger'){
     const l=suiteControls.ledger;
-    target.innerHTML=`<h3>Ledger</h3><p>Impact and Runtime decisions can be retained as tamper-evident evidence so the security story survives beyond a CI run.</p><div class="detail-card"><div class="row"><span>Status</span><span class="status ok">${l.status}</span></div><div class="row"><span>Format</span><span class="code">${l.format}</span></div><div class="row"><span>Verify</span><span class="code">changefence ledger-verify</span></div></div>`;
+    target.innerHTML=`<h3>Ledger</h3><p>Impact, approval issuance and Runtime consumption can be retained as tamper-evident evidence so the security story survives beyond a CI run.</p><div class="detail-card"><div class="row"><span>Status</span><span class="status ok">${l.status}</span></div><div class="row"><span>Format</span><span class="code">${l.format}</span></div><div class="row"><span>Verify</span><span class="code">changefence ledger-verify</span></div></div>`;
   }
 }
 
