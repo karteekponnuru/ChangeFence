@@ -46,6 +46,17 @@ class ReviewRule:
     reason: str = "Security review required before execution."
 
 
+@dataclass(frozen=True)
+class PolicyAuthority:
+    name: str
+    version: str
+    owner: str
+    source: str = ""
+    approved_by: str = ""
+    effective_from: str = ""
+    digest: str = ""
+
+
 @dataclass
 class SystemSpec:
     name: str
@@ -53,6 +64,7 @@ class SystemSpec:
     tools: Dict[str, Tool]
     invariants: List[Invariant]
     review_rules: List[ReviewRule] = field(default_factory=list)
+    policy_authority: PolicyAuthority | None = None
 
 
 @dataclass(frozen=True)
