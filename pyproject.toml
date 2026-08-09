@@ -5,12 +5,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "changefence"
 version = "2026.8.9"
-description = "Security change control for AI agents"
+description = "Change-aware security impact analysis for AI agents"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [{name = "Karteek Ponnuru"}]
-keywords = ["ai-security", "agents", "agentic-ai", "security-regression", "ci-cd"]
+keywords = ["ai-security", "agents", "agentic-ai", "security-change-impact", "capability-diff", "ci-cd"]
 classifiers = [
   "Intended Audience :: Developers",
   "Topic :: Security",
