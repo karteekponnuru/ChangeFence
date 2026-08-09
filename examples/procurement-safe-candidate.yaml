@@ -1,0 +1,29 @@
+system: acme-procurement-safe-candidate
+
+agents:
+  procurement:
+    model: gemini-enterprise
+    prompt_id: procurement-revised
+    tools: [supplier]
+  finance:
+    model: gemini-enterprise
+    prompt_id: finance-safe
+    tools: [payments]
+
+tools:
+  supplier:
+    capabilities:
+      - {name: supplier.read, severity: low}
+      - {name: supplier.bank_account.write, severity: high}
+  payments:
+    capabilities:
+      - {name: invoice.read, severity: low}
+      - {name: payment.execute, severity: critical}
+
+invariants:
+  - id: FIN-001
+    severity: critical
+    description: Procurement must never gain authority to execute payments.
+    forbid_reachability:
+      from: procurement
+      to: payment.execute
