@@ -4,15 +4,20 @@ from __future__ import annotations
 
 import argparse
 import json
+import tempfile
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from changefence.approvals import issue_approval_lease
 from changefence.impact import build_impact_report
 from changefence.policy import build_policy_plan
-from changefence.runtime import decide_action
+from changefence.runtime import authorize_action, decide_action
 from changefence.spec import load_spec
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "docs" / "demo-data"
+DEMO_SECRET = "changefence-demo-only-secret-not-for-production-2026"
+DEMO_TIME = datetime(2026, 8, 9, 22, 30, tzinfo=timezone.utc)
 
 SCENARIOS = {
     "procurement-delegation": {
@@ -74,12 +79,39 @@ def _suite_controls_payload() -> str:
         origin_agent="procurement",
         capability="supplier.bank_account.write",
     )
+    lease = issue_approval_lease(
+        reviewed,
+        runtime_review,
+        approved_by="alice@example.com",
+        approver_group="procurement-security",
+        secret=DEMO_SECRET,
+        now=DEMO_TIME,
+        lease_id="CF-APR-DEMO0001",
+        context={"pr": 284, "ticket": "SEC-91"},
+    )
+    with tempfile.TemporaryDirectory() as temp_dir:
+        runtime_authorized = authorize_action(
+            reviewed,
+            origin_agent="procurement",
+            capability="supplier.bank_account.write",
+            approval_lease=lease,
+            approval_secret=DEMO_SECRET,
+            usage_path=Path(temp_dir) / "approval-usage.json",
+            now=DEMO_TIME + timedelta(minutes=1),
+        )
+
     base = load_spec(ROOT / "examples/procurement-base.yaml")
     candidate = load_spec(ROOT / "examples/procurement-candidate.yaml")
     impact = build_impact_report(base, candidate, use_llm=False)
     policy = build_policy_plan(impact)
     payload = {
         "runtime_review": runtime_review,
+        "approval_lease": {
+            **{key: value for key, value in lease.items() if key != "signature"},
+            "signature_present": True,
+            "demo_only": True,
+        },
+        "runtime_authorized": runtime_authorized,
         "policy_plan": policy,
         "probe": {
             "status": "LOCAL_MODEL_REQUIRED",
@@ -91,7 +123,7 @@ def _suite_controls_payload() -> str:
             "status": "AVAILABLE",
             "format": "hash-chained JSONL",
             "commands": ["changefence ledger-append", "changefence ledger-verify"],
-            "claim": "Impact and runtime decisions can be recorded in a tamper-evident local evidence chain."
+            "claim": "Impact, approval issuance, and runtime consumption can be recorded in a tamper-evident local evidence chain."
         }
     }
     return json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
