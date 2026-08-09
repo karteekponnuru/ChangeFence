@@ -1,119 +1,155 @@
-# ChangeFence
+<div align="center">
 
-**Security change control for AI agents.**
+# 🛡️ CHANGEFENCE
 
-> **Your code diff is not your agent diff.**
+### **Your code diff is not your agent diff.**
 
-A small change to an AI agent can create a large security change. Adding a tool, changing a prompt, switching a model, or allowing one agent to delegate to another can create authority that is not obvious from the code review itself.
+Security change control for AI agents.
 
-ChangeFence compares a known baseline with a proposed release and answers two questions:
+[![Tests](https://github.com/karteekponnuru/ChangeFence/actions/workflows/ci.yml/badge.svg)](https://github.com/karteekponnuru/ChangeFence/actions/workflows/ci.yml)
+[![Playground](https://img.shields.io/badge/⚡_Interactive_Playground-54E1FF?style=for-the-badge&labelColor=07111f)](https://karteekponnuru.github.io/ChangeFence/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-9CFF57.svg?style=for-the-badge&labelColor=07111f)](LICENSE)
 
-1. **What security-relevant authority became newly reachable?**
-2. **Did repeated adversarial tests become worse in the candidate release?**
+**A tiny agent change can create a massive security change. ChangeFence finds the consequence before it ships.**
 
-The result is a deterministic security gate that can block a release when a non-negotiable security invariant is violated.
+[🎮 Break the demo](https://karteekponnuru.github.io/ChangeFence/) · [⚙️ How it works](#-how-it-works) · [🧪 Run locally](#-try-it-yourself)
 
-## The problem in one example
+</div>
 
-A Procurement Agent can update supplier records. A Finance Agent can execute payments. Neither permission is unusual.
+---
 
-A release adds this feature:
+## 🎮 Can you break this agent?
+
+Imagine this perfectly reasonable AI setup:
 
 ```text
-Procurement Agent → may delegate to → Finance Agent
+🤖 Procurement Agent            🧠 Finance Agent
+   │                                 │
+   ├── supplier.read                 ├── invoice.read
+   └── supplier.write                └── payment.execute
 ```
 
-Now Procurement can indirectly reach `payment.execute` through Finance. Every individual permission is valid, but the combined authority violates the business rule:
+Neither agent has an obviously dangerous permission problem.
 
-> Procurement must never gain authority to execute a payment.
+Now a developer adds one small feature:
 
-ChangeFence detects the new path and blocks the release.
+```diff
++ Procurement Agent → may delegate to → Finance Agent
+```
+
+Suddenly this becomes possible:
+
+```text
+✉️ Malicious supplier email
+        ↓
+🤖 Procurement Agent
+        ↓ delegates
+🧠 Finance Agent
+        ↓
+💸 payment.execute
+```
+
+Every individual permission is legitimate.
+
+The **combined authority is not**.
+
+ChangeFence detects that new security path and blocks the release.
+
+> **This is the core idea:** agent security can change even when traditional code review and individual permissions look fine.
+
+### 👉 [Try the interactive security lab](https://karteekponnuru.github.io/ChangeFence/)
+
+---
+
+## 🧠 What ChangeFence actually asks
+
+When an AI agent changes, ChangeFence compares the trusted baseline with the proposed release and asks:
+
+| Question | Why it matters |
+|---|---|
+| 🧬 What changed? | Model, prompt, tool or agent-to-agent delegation |
+| 🔓 What became newly reachable? | New indirect authority can appear through composition |
+| 🚨 Did a security invariant break? | Critical rules become deterministic release gates |
+| 🧪 Did adversarial behavior get worse? | Candidate releases can be compared against repeated attack tests |
+
+---
+
+## 🕸️ How it works
+
+```mermaid
+flowchart LR
+    A[Trusted Agent Release] --> C[ChangeFence]
+    B[Candidate Agent Release] --> C
+    C --> D{What changed?}
+    D --> E[Prompt]
+    D --> F[Model]
+    D --> G[Tools]
+    D --> H[Delegation]
+    E --> I[Capability Graph]
+    F --> I
+    G --> I
+    H --> I
+    I --> J[Security Invariants]
+    J --> K{New unsafe path?}
+    K -->|No| L[✅ PASS]
+    K -->|Yes| M[❌ BLOCK RELEASE]
+```
+
+ChangeFence's authority engine is deterministic. An LLM may eventually help **suggest attack hypotheses**, but the LLM does not get to invent whether a security path actually exists.
+
+---
+
+## 💥 What a finding looks like
 
 ```text
 CHANGEFENCE
+
 Baseline:  acme-procurement-baseline
 Candidate: acme-procurement-candidate
 
-Security gate: FAIL
+Security gate: FAIL 🔴
 
-[CRITICAL] FIN-001 — Procurement must never gain authority to execute payments.
-New authority: procurement -> payment.execute
-Path: procurement -> delegate:finance -> finance -> tool:payments -> cap:payment.execute
+[CRITICAL] FIN-001
+Procurement must never gain authority to execute payments.
+
+New authority:
+procurement → finance → payment.execute
+
+Path:
+procurement
+→ delegate:finance
+→ finance
+→ tool:payments
+→ payment.execute
+
+❌ BLOCK RELEASE
 ```
 
-## Explore it without being technical
+---
 
-The `docs/` folder contains the ChangeFence browser playground. It explains the problem and runs the core demo with one click. The repository also includes a GitHub Pages deployment workflow so the playground can be hosted publicly.
+## 🧪 Behavioral security diff
 
-## What ChangeFence analyzes
-
-### Authority security diff
-
-ChangeFence understands:
-
-- agents
-- tools
-- security-relevant capabilities
-- agent-to-agent delegation
-- prompt identifiers
-- model changes
-- security invariants
-- capability severity
-
-It computes transitive authority, compares the baseline and candidate, and explains the shortest newly introduced path to a forbidden capability.
-
-### Behavioral security diff
-
-ChangeFence can also compare repeated adversarial test results produced by any agent framework. The framework only needs to provide scenario IDs and pass/fail outcomes. This keeps ChangeFence model- and framework-independent.
-
-Example:
+ChangeFence can also compare repeated adversarial tests between releases.
 
 ```text
-INDIRECT-PROMPT-INJECTION     100% → 30%   REGRESSION
-SENSITIVE-DATA-EXFILTRATION   90%  → 90%   UNCHANGED
-TOOL-AUTHORITY-ESCALATION     100% → 40%   REGRESSION
+ATTACK SCENARIO                     BASELINE     CANDIDATE
+────────────────────────────────────────────────────────
+Indirect prompt injection            100%          30%  🔴
+Sensitive-data exfiltration            90%          90%  🟢
+Tool-authority escalation             100%          40%  🔴
 ```
 
-## Run it
+That turns a vague question like:
 
-Requires Python 3.10+.
+> Did the new agent become less safe?
 
-```bash
-python -m pip install -e .
-```
+into something measurable.
 
-Run the authority diff:
+---
 
-```bash
-changefence compare \
-  examples/procurement-base.yaml \
-  examples/procurement-candidate.yaml
-```
+## 🚦 Use it as a release gate
 
-A security regression exits with status code `1`, so CI/CD systems can block the release.
-
-Run the behavioral diff:
-
-```bash
-changefence behavior-diff \
-  examples/behavior-base.json \
-  examples/behavior-candidate.json
-```
-
-Generate a shareable HTML security report:
-
-```bash
-changefence report \
-  examples/procurement-base.yaml \
-  examples/procurement-candidate.yaml \
-  --behavior-base examples/behavior-base.json \
-  --behavior-candidate examples/behavior-candidate.json \
-  --out changefence-report.html
-```
-
-## Use ChangeFence in a GitHub workflow
-
-This repository is also a composite GitHub Action. In another repository:
+ChangeFence is also a reusable GitHub Action.
 
 ```yaml
 - name: ChangeFence agent security gate
@@ -124,64 +160,155 @@ This repository is also a composite GitHub Action. In another repository:
     fail-on: high
 ```
 
-If the candidate introduces a new invariant violation at or above the configured severity, the workflow fails.
+A newly introduced high or critical security invariant violation makes the workflow fail.
 
-## Agent system specification
+```text
+Developer changes agent
+        ↓
+      GitHub
+        ↓
+   ChangeFence
+     ↙     ↘
+  ✅ PASS   ❌ BLOCK
+```
 
-ChangeFence uses a small YAML file because it is easy for code and CI systems to read. You do **not** need YAML to understand or explore the product; it is the developer integration format underneath the browser experience.
+---
+
+## 🧪 Try it yourself
+
+Requires Python 3.10+.
+
+```bash
+python -m pip install -e .
+```
+
+### 1. Break the procurement agent
+
+```bash
+changefence compare \
+  examples/procurement-base.yaml \
+  examples/procurement-candidate.yaml
+```
+
+Expected result: **FAIL** because the candidate introduces transitive payment authority.
+
+### 2. Compare against a safe change
+
+```bash
+changefence compare \
+  examples/procurement-base.yaml \
+  examples/procurement-safe-candidate.yaml
+```
+
+Expected result: **PASS**.
+
+### 3. Run behavioral regression analysis
+
+```bash
+changefence behavior-diff \
+  examples/behavior-base.json \
+  examples/behavior-candidate.json
+```
+
+### 4. Generate a shareable report
+
+```bash
+changefence report \
+  examples/procurement-base.yaml \
+  examples/procurement-candidate.yaml \
+  --behavior-base examples/behavior-base.json \
+  --behavior-candidate examples/behavior-candidate.json \
+  --out changefence-report.html
+```
+
+---
+
+## 🧩 What is an agent spec?
+
+ChangeFence needs a machine-readable description of an AI system. Today that uses YAML.
+
+You do **not** need to understand YAML to explore ChangeFence. Think of it as a form describing:
+
+```text
+Agent
+├── Which model does it use?
+├── Which tools can it call?
+├── Which other agents can it delegate to?
+└── Which security rules must never be violated?
+```
+
+Example:
 
 ```yaml
-system: acme-procurement
-
 agents:
   procurement:
     tools: [supplier]
     delegates_to: [finance]
+
   finance:
     tools: [payments]
 
-tools:
-  supplier:
-    capabilities:
-      - name: supplier.bank_account.write
-        severity: high
-  payments:
-    capabilities:
-      - name: payment.execute
-        severity: critical
-
 invariants:
   - id: FIN-001
-    severity: critical
-    description: Procurement must never gain authority to execute payments.
+    description: Procurement must never execute payments.
     forbid_reachability:
       from: procurement
       to: payment.execute
 ```
 
-## Design principle
+---
 
-LLMs may be useful for generating candidate attack scenarios, but **an LLM should not be allowed to invent whether an authority path exists**. ChangeFence keeps the core capability and invariant analysis deterministic and explainable.
+## 🔬 Product thesis
 
-## Repository map
+Traditional software review answers:
+
+> **What code changed?**
+
+ChangeFence is built around a different question:
+
+> **What security behavior became possible because of that change?**
+
+As AI systems gain tools, memory, APIs, MCP servers and agent-to-agent delegation, those two questions increasingly diverge.
+
+---
+
+## 🗺️ Project map
 
 ```text
-changefence/          Python analysis engine and CLI
-docs/                 Public browser playground and plain-English concepts
-examples/             Safe and unsafe agent releases + behavioral test data
-tests/                Automated regression tests
-action.yml            Reusable GitHub security gate
-.github/workflows/    CI and GitHub Pages deployment
+ChangeFence/
+│
+├── 🧠 changefence/          deterministic security engine
+├── 🎮 docs/                 interactive browser playground
+├── 🧪 examples/             safe + vulnerable agent releases
+├── ✅ tests/                automated regression tests
+├── 🛡️ action.yml           reusable GitHub security gate
+└── ⚙️ .github/workflows/    CI + playground deployment
 ```
 
-## Scope
+---
 
-ChangeFence is a security change-control layer, not a replacement for IAM, runtime authorization, model safety filters, monitoring, or human approvals. It is designed to catch **release-to-release security regressions** that those controls may not make obvious during review.
+## 🧱 What ChangeFence is not
 
-## Author
+ChangeFence does **not** replace IAM, runtime authorization, model safety filters, monitoring or human approvals.
 
-Created by **Karteek Ponnuru** as an open-source security project for autonomous AI systems.
+It focuses on one specific gap:
 
-## License
+> **security regressions introduced when an AI agent changes.**
 
-MIT.
+---
+
+## 👋 Built by
+
+**Karteek Ponnuru**
+
+Exploring the intersection of **AI agents × security × authorization × governance**.
+
+If this problem is interesting to you, break the demo, open an issue, challenge the threat model, or contribute another vulnerable agent scenario.
+
+<div align="center">
+
+### [⚡ Launch ChangeFence Playground](https://karteekponnuru.github.io/ChangeFence/)
+
+MIT License · Open source
+
+</div>
