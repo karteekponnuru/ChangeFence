@@ -23,6 +23,7 @@ def test_runtime_blocks_explicit_invariant_and_allows_known_safe_action():
     assert allowed["path"]
     assert blocked["decision"] == "BLOCK"
     assert blocked["invariant"]["id"] == "FIN-001"
+    assert blocked["review"] is None
 
 
 def test_runtime_reviews_unmodeled_capability():
@@ -30,6 +31,34 @@ def test_runtime_reviews_unmodeled_capability():
     decision = decide_action(baseline, origin_agent="procurement", capability="root.shell")
     assert decision["decision"] == "REVIEW"
     assert decision["evidence_level"] == "UNKNOWN"
+    assert decision["review"]["approver"] == "security"
+
+
+def test_runtime_applies_configured_human_review_rule():
+    reviewed = load_spec("examples/procurement-review.yaml")
+    decision = decide_action(
+        reviewed,
+        origin_agent="procurement",
+        capability="supplier.bank_account.write",
+    )
+    assert decision["decision"] == "REVIEW"
+    assert decision["review"]["rule_id"] == "REV-001"
+    assert decision["review"]["approver"] == "procurement-security"
+    assert decision["review"]["expires_minutes"] == 15
+    assert decision["review"]["max_uses"] == 1
+
+
+def test_invariant_block_wins_over_review_configuration():
+    reviewed = load_spec("examples/procurement-review.yaml")
+    decision = decide_action(
+        reviewed,
+        origin_agent="procurement",
+        executor_agent="finance",
+        capability="payment.execute",
+    )
+    assert decision["decision"] == "BLOCK"
+    assert decision["review"] is None
+    assert decision["invariant"]["id"] == "FIN-001"
 
 
 def test_policy_plan_comes_from_proven_gate_violation():
