@@ -51,7 +51,16 @@ SCENARIOS = {
 def render(slug: str, config: dict) -> str:
     base = load_spec(ROOT / config["base_file"])
     candidate = load_spec(ROOT / config["candidate_file"])
-    result = build_impact_report(base, candidate, use_llm=False)
+    report = build_impact_report(base, candidate, use_llm=False)
+    result = {
+        "decision": report["decision"],
+        "decision_reason": report["decision_reason"],
+        "summary": report["summary"],
+        "proven_findings": report["proven_findings"],
+        "gate_violations": report["structural"]["gate_violations"],
+        "structural_changes": report["structural"]["structural_diff"]["changes"],
+        "evidence_contract": report["evidence_contract"],
+    }
     payload = {"scenario": slug, **config, "result": result}
     return json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
 
