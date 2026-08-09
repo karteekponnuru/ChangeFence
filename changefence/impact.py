@@ -7,6 +7,7 @@ import yaml
 
 from .engine import compare
 from .semantic import _ollama_structured_request, analyze_semantic_change, build_inferred_specs
+from .spec import policy_authority_dict
 
 ATTACK_SCHEMA = {
     "type": "object",
@@ -174,6 +175,7 @@ def build_impact_report(base, candidate, *, diff_text: str = "", repository_cont
         "candidate": candidate.name,
         "decision": decision,
         "decision_reason": reason,
+        "policy_authority": policy_authority_dict(candidate),
         "structural": structural,
         "proven_findings": proven,
         "inferred_findings": inferred_findings,
