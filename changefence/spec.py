@@ -1,6 +1,12 @@
+from __future__ import annotations
+
+import hashlib
+import json
 from pathlib import Path
+
 import yaml
-from .models import Agent, Capability, Invariant, ReviewRule, SystemSpec, Tool
+
+from .models import Agent, Capability, Invariant, PolicyAuthority, ReviewRule, SystemSpec, Tool
 
 ALLOWED_SEVERITIES = {"low", "medium", "high", "critical"}
 ALLOWED_EVIDENCE = {"*", "UNKNOWN", "PROVEN", "HYPOTHESIZED", "VERIFIED"}
@@ -15,6 +21,19 @@ def _severity(value: str | None, default: str = "medium") -> str:
     if value not in ALLOWED_SEVERITIES:
         raise SpecError(f"Unsupported severity '{value}'. Use low, medium, high, or critical.")
     return value
+
+
+def _load_yaml(path: str | Path) -> tuple[Path, dict]:
+    path = Path(path)
+    try:
+        raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except FileNotFoundError as exc:
+        raise SpecError(f"Spec not found: {path}") from exc
+    except yaml.YAMLError as exc:
+        raise SpecError(f"Invalid YAML in {path}: {exc}") from exc
+    if not isinstance(raw, dict):
+        raise SpecError(f"Top-level YAML in {path} must be a mapping.")
+    return path, raw
 
 
 def _parse_capability(item) -> Capability:
@@ -57,17 +76,68 @@ def _parse_review_rule(item) -> ReviewRule:
     )
 
 
-def load_spec(path: str | Path) -> SystemSpec:
-    path = Path(path)
-    try:
-        raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    except FileNotFoundError as exc:
-        raise SpecError(f"Spec not found: {path}") from exc
-    except yaml.YAMLError as exc:
-        raise SpecError(f"Invalid YAML in {path}: {exc}") from exc
+def _parse_invariants(raw: dict) -> list[Invariant]:
+    invariants = []
+    for inv in raw.get("invariants", []):
+        if "forbid_reachability" not in inv:
+            raise SpecError(f"Invariant {inv.get('id', '<unknown>')} is missing forbid_reachability.")
+        rule = inv["forbid_reachability"]
+        invariants.append(
+            Invariant(
+                id=str(inv["id"]),
+                description=str(inv.get("description", "")),
+                source_agent=str(rule["from"]),
+                forbidden_capability=str(rule["to"]),
+                severity=_severity(inv.get("severity"), "critical"),
+            )
+        )
+    return invariants
 
-    if not isinstance(raw, dict):
-        raise SpecError(f"Top-level spec in {path} must be a mapping.")
+
+def _policy_digest(raw: dict) -> str:
+    canonical = json.dumps(raw, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
+
+
+def _parse_policy_authority(path: Path, raw: dict) -> PolicyAuthority:
+    if "agents" in raw or "tools" in raw:
+        raise SpecError(
+            f"Policy registry {path} must contain security policy only; agents/tools belong in the developer-controlled agent spec."
+        )
+    meta = raw.get("policy")
+    if not isinstance(meta, dict):
+        raise SpecError(f"Policy registry {path} requires a top-level 'policy' metadata block.")
+    missing = [field for field in ("name", "version", "owner") if not str(meta.get(field, "")).strip()]
+    if missing:
+        raise SpecError(f"Policy registry {path} is missing required metadata: {', '.join(missing)}.")
+    return PolicyAuthority(
+        name=str(meta["name"]).strip(),
+        version=str(meta["version"]).strip(),
+        owner=str(meta["owner"]).strip(),
+        source=str(meta.get("source", "")).strip(),
+        approved_by=str(meta.get("approved_by", "")).strip(),
+        effective_from=str(meta.get("effective_from", "")).strip(),
+        digest=_policy_digest(raw),
+    )
+
+
+def policy_authority_dict(spec: SystemSpec) -> dict | None:
+    authority = spec.policy_authority
+    if authority is None:
+        return None
+    return {
+        "name": authority.name,
+        "version": authority.version,
+        "owner": authority.owner,
+        "source": authority.source,
+        "approved_by": authority.approved_by,
+        "effective_from": authority.effective_from,
+        "digest": authority.digest,
+    }
+
+
+def load_spec(path: str | Path, policy_path: str | Path | None = None) -> SystemSpec:
+    path, raw = _load_yaml(path)
 
     agents = {
         name: Agent(
@@ -85,22 +155,16 @@ def load_spec(path: str | Path) -> SystemSpec:
         caps = tuple(_parse_capability(item) for item in cfg.get("capabilities", []))
         tools[name] = Tool(name=name, capabilities=caps)
 
-    invariants = []
-    for inv in raw.get("invariants", []):
-        if "forbid_reachability" not in inv:
-            raise SpecError(f"Invariant {inv.get('id', '<unknown>')} is missing forbid_reachability.")
-        rule = inv["forbid_reachability"]
-        invariants.append(
-            Invariant(
-                id=str(inv["id"]),
-                description=str(inv.get("description", "")),
-                source_agent=str(rule["from"]),
-                forbidden_capability=str(rule["to"]),
-                severity=_severity(inv.get("severity"), "critical"),
-            )
-        )
+    policy_authority = None
+    policy_raw = raw
+    if policy_path is not None:
+        policy_file, policy_raw = _load_yaml(policy_path)
+        policy_authority = _parse_policy_authority(policy_file, policy_raw)
 
-    review_rules = [_parse_review_rule(item) for item in raw.get("reviews", [])]
+    # External policy is the sole security ground truth when supplied.
+    # Developer-embedded invariants/reviews are intentionally ignored.
+    invariants = _parse_invariants(policy_raw)
+    review_rules = [_parse_review_rule(item) for item in policy_raw.get("reviews", [])]
 
     spec = SystemSpec(
         name=str(raw.get("system", path.stem)),
@@ -108,6 +172,7 @@ def load_spec(path: str | Path) -> SystemSpec:
         tools=tools,
         invariants=invariants,
         review_rules=review_rules,
+        policy_authority=policy_authority,
     )
     validate_spec(spec)
     return spec
