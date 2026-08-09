@@ -5,176 +5,116 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="theme-color" content="#0b0d10" />
 <title>ChangeFence — Security change control for AI agents</title>
-<meta name="description" content="Detect security regressions when AI agents change models, prompts, tools, permissions, or delegation paths." />
+<meta name="description" content="See whether a change made an AI agent more dangerous before it reaches production." />
 <style>
 :root{
-  --bg:#090b0d;--surface:#0f1215;--surface-2:#14181c;--surface-3:#191e23;
-  --border:#252b31;--border-strong:#343c44;--text:#f2f4f5;--muted:#9aa3ab;
-  --faint:#69737c;--green:#62d38b;--green-bg:#102219;--red:#ff6b72;--red-bg:#281315;
-  --amber:#e9bb67;--amber-bg:#241c0f;--blue:#78a8ff;--shadow:0 24px 80px rgba(0,0,0,.32)
+  --bg:#0b0d10;--panel:#111419;--panel2:#15191e;--border:#262c33;--text:#f4f6f7;
+  --muted:#9ca6af;--faint:#6d7780;--green:#65d38d;--green-bg:#102019;
+  --red:#ff747b;--red-bg:#251416;--blue:#8bb4ff;--amber:#e7be74;
 }
-*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.5}
-a{color:inherit;text-decoration:none}button{font:inherit}code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-.shell{max-width:1240px;margin:0 auto;padding:0 28px}
-.topbar{height:64px;border-bottom:1px solid var(--border);display:flex;align-items:center;background:rgba(9,11,13,.92);position:sticky;top:0;z-index:50;backdrop-filter:blur(12px)}
-.topbar .shell{width:100%;display:flex;align-items:center;justify-content:space-between}.brand{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:-.02em}.mark{width:25px;height:25px;border:1px solid var(--border-strong);border-radius:7px;display:grid;place-items:center;background:var(--surface)}.mark:before{content:"";width:9px;height:11px;border:1.5px solid var(--green);border-top-width:4px;border-radius:2px}
-.nav{display:flex;gap:22px;color:var(--muted);font-size:13px}.nav a:hover{color:var(--text)}
-.hero{padding:78px 0 46px}.eyebrow{font:600 12px/1 ui-monospace,SFMono-Regular,Menlo,monospace;text-transform:uppercase;letter-spacing:.11em;color:var(--green);margin-bottom:18px}.hero h1{font-size:clamp(40px,6vw,72px);line-height:1.02;letter-spacing:-.055em;max-width:870px;margin:0 0 22px}.hero p{max-width:700px;color:var(--muted);font-size:18px;margin:0}.hero-actions{display:flex;gap:10px;margin-top:28px;flex-wrap:wrap}.btn{border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);padding:10px 14px;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer}.btn:hover{background:var(--surface-3)}.btn.primary{background:var(--text);color:#0b0d10;border-color:var(--text)}.btn.primary:hover{background:#dfe3e6}
-.product{border:1px solid var(--border);border-radius:14px;background:var(--surface);box-shadow:var(--shadow);overflow:hidden;margin-bottom:96px}.windowbar{height:46px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 16px;background:#0c0f12}.window-title{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--muted)}.status-dot{width:7px;height:7px;border-radius:50%;background:var(--green)}.build{font:500 11px/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--faint)}
-.app{display:grid;grid-template-columns:230px minmax(0,1fr) 310px;min-height:590px}.sidebar{border-right:1px solid var(--border);padding:18px 12px;background:#0d1013}.section-label{font:600 10px/1 ui-monospace,SFMono-Regular,Menlo,monospace;text-transform:uppercase;letter-spacing:.12em;color:var(--faint);padding:5px 9px 10px}.scenario{width:100%;text-align:left;padding:10px;border:1px solid transparent;border-radius:8px;background:transparent;color:var(--muted);cursor:pointer;margin-bottom:3px}.scenario:hover{background:var(--surface-2);color:var(--text)}.scenario.active{background:var(--surface-2);border-color:var(--border);color:var(--text)}.scenario strong{display:block;font-size:13px;font-weight:600}.scenario span{font-size:11px;color:var(--faint)}.sidebar-divider{height:1px;background:var(--border);margin:16px 8px}.mini-list{padding:0 8px}.mini-item{display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--muted);padding:7px 0}.mini-value{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--text)}
-.workspace{min-width:0}.toolbar{height:57px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 18px}.segmented{display:flex;background:#0a0d0f;border:1px solid var(--border);border-radius:7px;padding:3px}.segmented button{border:0;background:transparent;color:var(--muted);padding:6px 10px;border-radius:5px;font-size:12px;cursor:pointer}.segmented button.active{background:var(--surface-3);color:var(--text)}.run{border:1px solid #405047;background:#19261e;color:#bfe9ce;padding:7px 11px;border-radius:7px;font-size:12px;font-weight:650;cursor:pointer}.run:hover{background:#203126}
-.graph-wrap{position:relative;height:425px;overflow:hidden;background-image:radial-gradient(circle,#293038 1px,transparent 1px);background-size:22px 22px;background-position:-7px -7px}.graph-caption{position:absolute;top:16px;left:18px;z-index:3;font:500 11px/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--faint)}
-svg.edges{position:absolute;inset:0;width:100%;height:100%;z-index:1;pointer-events:none}.edge-line{stroke:#3a424a;stroke-width:1.6;fill:none}.edge-line.changed{stroke:var(--red);stroke-width:2}.edge-line.safe{stroke:var(--green)}.edge-label{font:500 10px ui-monospace,SFMono-Regular,Menlo,monospace;fill:#76818a}.edge-label.changed{fill:#ff9ca1}
-.node{position:absolute;z-index:2;width:156px;min-height:72px;border:1px solid var(--border-strong);border-radius:9px;background:#12161a;padding:11px 12px;box-shadow:0 8px 28px rgba(0,0,0,.22);cursor:pointer;transition:border-color .15s,transform .15s}.node:hover{border-color:#525d67;transform:translateY(-1px)}.node.changed{border-color:#6f3438;background:#1a1214}.node.safe{border-color:#315941;background:#101813}.node-type{font:500 9px/1 ui-monospace,SFMono-Regular,Menlo,monospace;text-transform:uppercase;letter-spacing:.1em;color:var(--faint)}.node-title{font-size:13px;font-weight:650;margin-top:7px}.node-sub{font-size:10px;color:var(--muted);margin-top:3px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.node-badge{position:absolute;right:8px;top:8px;width:7px;height:7px;border-radius:50%;background:var(--faint)}.node.changed .node-badge{background:var(--red)}.node.safe .node-badge{background:var(--green)}
-.n1{left:7%;top:19%}.n2{left:38%;top:19%}.n3{right:7%;top:19%}.n4{left:22%;bottom:17%}.n5{right:22%;bottom:17%}
-.diffbar{height:62px;border-top:1px solid var(--border);display:grid;grid-template-columns:repeat(4,1fr);background:#0d1013}.metric{padding:12px 16px;border-right:1px solid var(--border)}.metric:last-child{border-right:0}.metric-label{font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:.08em}.metric-value{font:600 14px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;margin-top:4px}.metric-value.bad{color:var(--red)}.metric-value.good{color:var(--green)}
-.inspector{border-left:1px solid var(--border);background:#0d1013;padding:18px 16px}.inspector h3{font-size:13px;margin:0 0 15px}.risk-card{border:1px solid var(--border);background:var(--surface);border-radius:9px;padding:13px;margin-bottom:13px}.risk-head{display:flex;justify-content:space-between;align-items:center}.risk-title{font-size:11px;color:var(--muted)}.pill{font:600 9px/1 ui-monospace,SFMono-Regular,Menlo,monospace;text-transform:uppercase;letter-spacing:.08em;border:1px solid var(--border-strong);border-radius:999px;padding:5px 7px}.pill.critical{color:#ff9ca1;border-color:#633237;background:var(--red-bg)}.pill.pass{color:#a7e4bd;border-color:#32523e;background:var(--green-bg)}.risk-score{font-size:30px;font-weight:720;letter-spacing:-.04em;margin:10px 0 4px}.risk-score.red{color:var(--red)}.risk-score.green{color:var(--green)}.risk-copy{font-size:11px;color:var(--muted);line-height:1.55}.finding{border:1px solid var(--border);border-radius:9px;background:var(--surface);overflow:hidden}.finding-head{padding:12px;border-bottom:1px solid var(--border)}.finding-code{font:600 10px/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--red)}.finding h4{font-size:12px;margin:7px 0 0}.path{padding:12px;font:500 11px/1.75 ui-monospace,SFMono-Regular,Menlo,monospace;color:#c7ced3}.path span{color:var(--red)}.empty{padding:18px 12px;color:var(--muted);font-size:12px;border:1px dashed var(--border-strong);border-radius:9px}.detail{margin-top:13px;border-top:1px solid var(--border);padding-top:13px}.detail-row{display:flex;justify-content:space-between;gap:14px;padding:5px 0;font-size:11px}.detail-row span:first-child{color:var(--faint)}.detail-row span:last-child{text-align:right;color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
-.story{padding:0 0 100px}.story-grid{display:grid;grid-template-columns:1fr 1fr;gap:54px}.story h2{font-size:34px;letter-spacing:-.035em;margin:0 0 16px}.story p{color:var(--muted);font-size:15px;max-width:520px}.steps{border-top:1px solid var(--border)}.step{display:grid;grid-template-columns:44px 1fr;padding:18px 0;border-bottom:1px solid var(--border)}.step-num{font:500 11px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--faint)}.step strong{font-size:13px}.step p{font-size:12px;margin:5px 0 0}.terminal{border:1px solid var(--border);border-radius:10px;background:#080a0c;overflow:hidden}.terminal-head{padding:10px 13px;border-bottom:1px solid var(--border);font:500 10px/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--faint)}pre{margin:0;padding:17px;overflow:auto;color:#bfc7cd;font:500 11px/1.75 ui-monospace,SFMono-Regular,Menlo,monospace}.t-red{color:#ff8e94}.t-green{color:#87d9a4}
-footer{border-top:1px solid var(--border);padding:27px 0 46px;color:var(--faint);font-size:12px}.footer-inner{display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap}
-@media(max-width:1050px){.app{grid-template-columns:190px minmax(0,1fr)}.inspector{grid-column:1/-1;border-left:0;border-top:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr;gap:14px}.detail{margin-top:0;border-top:0;padding-top:0}.graph-wrap{height:390px}.node{width:140px}.n1{left:5%}.n2{left:37%}.n3{right:5%}}
-@media(max-width:760px){.shell{padding:0 18px}.nav a:not(:last-child){display:none}.hero{padding-top:55px}.hero h1{font-size:43px}.app{display:block}.sidebar{border-right:0;border-bottom:1px solid var(--border);display:flex;overflow:auto;gap:4px}.sidebar .section-label,.sidebar-divider,.mini-list{display:none}.scenario{min-width:180px}.toolbar{height:auto;padding:11px;gap:10px;flex-wrap:wrap}.graph-wrap{height:430px;overflow:auto}.node{position:relative!important;left:auto!important;right:auto!important;top:auto!important;bottom:auto!important;margin:18px;width:calc(100% - 36px)}svg.edges{display:none}.diffbar{grid-template-columns:1fr 1fr;height:auto}.metric:nth-child(2){border-right:0}.metric:nth-child(-n+2){border-bottom:1px solid var(--border)}.inspector{display:block}.story-grid{grid-template-columns:1fr}.hero-actions{align-items:stretch}.btn{text-align:center}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.55}a{color:inherit;text-decoration:none}button{font:inherit}.wrap{max-width:1080px;margin:auto;padding:0 24px}.top{height:64px;border-bottom:1px solid var(--border);display:flex;align-items:center;background:rgba(11,13,16,.95);position:sticky;top:0;z-index:10}.top .wrap{width:100%;display:flex;justify-content:space-between;align-items:center}.brand{font-weight:750;letter-spacing:-.02em}.nav{display:flex;gap:20px;color:var(--muted);font-size:13px}.nav a:hover{color:var(--text)}
+.hero{padding:76px 0 50px}.eyebrow{font:600 11px/1 ui-monospace,SFMono-Regular,Menlo,monospace;text-transform:uppercase;letter-spacing:.12em;color:var(--green);margin-bottom:16px}.hero h1{font-size:clamp(42px,7vw,72px);line-height:1.03;letter-spacing:-.055em;max-width:850px;margin:0 0 20px}.hero p{max-width:680px;font-size:18px;color:var(--muted);margin:0}.hero strong{color:var(--text)}
+.demo{border:1px solid var(--border);border-radius:14px;background:var(--panel);overflow:hidden;margin-bottom:86px}.demo-head{padding:16px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}.demo-head span:first-child{font-weight:650;font-size:14px}.demo-head span:last-child{font:500 11px/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--faint)}
+.story{padding:28px}.question{font-size:14px;color:var(--muted);margin-bottom:18px}.compare{display:grid;grid-template-columns:1fr 48px 1fr;align-items:stretch}.release{border:1px solid var(--border);border-radius:11px;background:var(--panel2);padding:20px}.release-label{font:600 10px/1 ui-monospace,SFMono-Regular,Menlo,monospace;text-transform:uppercase;letter-spacing:.1em;color:var(--faint)}.release h3{margin:9px 0 8px;font-size:18px}.release p{margin:0;color:var(--muted);font-size:13px}.release ul{padding-left:18px;margin:15px 0 0;color:#c6ccd1;font-size:13px}.release li{margin:6px 0}.change{margin-top:14px;border-top:1px solid var(--border);padding-top:14px;font:600 12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--red)}.arrow{display:grid;place-items:center;color:var(--faint);font-size:22px}
+.run-area{text-align:center;padding:26px 0 8px}.run{border:0;border-radius:8px;background:var(--text);color:#0b0d10;padding:11px 18px;font-weight:700;cursor:pointer}.run:hover{background:#dfe3e6}.hint{display:block;margin-top:9px;color:var(--faint);font-size:11px}
+.result{display:none;margin-top:24px;border-top:1px solid var(--border);padding-top:26px}.result.show{display:block}.result-grid{display:grid;grid-template-columns:180px 1fr;gap:24px}.gate{border:1px solid #5b3033;background:var(--red-bg);border-radius:10px;padding:18px}.gate-label{font:600 10px/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:#ffadb1;text-transform:uppercase;letter-spacing:.1em}.gate-value{font-size:30px;font-weight:760;color:var(--red);margin:8px 0 2px}.gate p{margin:0;color:#d6aaad;font-size:12px}.finding h3{margin:0 0 8px;font-size:20px}.finding p{color:var(--muted);font-size:14px;max-width:670px}.path{margin-top:16px;border:1px solid var(--border);background:#0c0f12;border-radius:9px;padding:14px 16px;font:600 12px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace;color:#c7ced4}.path .new{color:var(--red)}.plain{margin-top:14px;padding:14px 16px;border-left:3px solid var(--red);background:#121519;color:#c8ced3;font-size:13px}.plain strong{color:var(--text)}
+.explain{padding-bottom:92px}.explain h2{font-size:32px;letter-spacing:-.035em;margin:0 0 12px}.explain>p{color:var(--muted);max-width:680px;margin:0}.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:28px}.step{border:1px solid var(--border);border-radius:10px;background:var(--panel);padding:19px}.step-num{font:600 10px/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--green);letter-spacing:.1em}.step h3{font-size:15px;margin:10px 0 7px}.step p{font-size:12px;color:var(--muted);margin:0}.local{margin-top:28px;border:1px solid var(--border);border-radius:10px;background:var(--panel);padding:20px}.local h3{margin:0 0 7px;font-size:15px}.local p{margin:0;color:var(--muted);font-size:13px}.local code{color:#c9d7ef;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+footer{border-top:1px solid var(--border);padding:25px 0 42px;color:var(--faint);font-size:12px}.footer{display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap}
+@media(max-width:760px){.nav a:first-child{display:none}.hero{padding-top:54px}.compare{grid-template-columns:1fr}.arrow{padding:10px;transform:rotate(90deg)}.result-grid{grid-template-columns:1fr}.steps{grid-template-columns:1fr}.story{padding:20px}}
 </style>
 </head>
 <body>
-<header class="topbar"><div class="shell"><a class="brand" href="#"><span class="mark"></span>ChangeFence</a><nav class="nav"><a href="#demo">Product</a><a href="#how">How it works</a><a href="https://github.com/karteekponnuru/ChangeFence">GitHub ↗</a></nav></div></header>
+<header class="top"><div class="wrap"><a class="brand" href="#">ChangeFence</a><nav class="nav"><a href="#how">How it works</a><a href="https://github.com/karteekponnuru/ChangeFence">GitHub ↗</a></nav></div></header>
 
-<main>
-<section class="hero shell">
-  <div class="eyebrow">Agent security change control</div>
-  <h1>Know when an AI agent becomes more dangerous.</h1>
-  <p>ChangeFence compares a trusted baseline with a proposed release and finds new authority paths and security regressions before they reach production.</p>
-  <div class="hero-actions"><a class="btn primary" href="#demo">Explore the analysis</a><a class="btn" href="https://github.com/karteekponnuru/ChangeFence">View the source</a></div>
+<main class="wrap">
+<section class="hero">
+  <div class="eyebrow">AI agent security</div>
+  <h1>Did this change make the agent more dangerous?</h1>
+  <p>ChangeFence compares a <strong>known-safe version</strong> of an AI agent with a <strong>proposed new version</strong> and finds dangerous capabilities that appeared because of the change.</p>
 </section>
 
-<section class="shell" id="demo">
-<div class="product">
-  <div class="windowbar"><div class="window-title"><span class="status-dot"></span>ChangeFence / release analysis</div><div class="build">CF-2026.08.09</div></div>
-  <div class="app">
-    <aside class="sidebar">
-      <div class="section-label">Security scenarios</div>
-      <button class="scenario active" data-scenario="procurement"><strong>Procurement</strong><span>Delegated payment authority</span></button>
-      <button class="scenario" data-scenario="data"><strong>Customer data</strong><span>Cross-agent exfiltration path</span></button>
-      <button class="scenario" data-scenario="deploy"><strong>Production deploy</strong><span>Coding agent privilege chain</span></button>
-      <div class="sidebar-divider"></div>
-      <div class="section-label">Release</div>
-      <div class="mini-list"><div class="mini-item"><span>Baseline</span><span class="mini-value">main</span></div><div class="mini-item"><span>Candidate</span><span class="mini-value">release/284</span></div><div class="mini-item"><span>Policy set</span><span class="mini-value">12</span></div></div>
-    </aside>
+<section class="demo">
+  <div class="demo-head"><span>Try one example</span><span>ACME PROCUREMENT</span></div>
+  <div class="story">
+    <div class="question">A company has two AI agents. The developer makes one seemingly small change.</div>
 
-    <section class="workspace">
-      <div class="toolbar">
-        <div class="segmented"><button id="baselineBtn" class="active">Baseline</button><button id="candidateBtn">Candidate</button></div>
-        <button class="run" id="runBtn">Run security diff</button>
+    <div class="compare">
+      <div class="release">
+        <div class="release-label">Before · trusted baseline</div>
+        <h3>Procurement Agent</h3>
+        <p>Helps manage suppliers.</p>
+        <ul>
+          <li>Can read supplier records</li>
+          <li>Can update supplier information</li>
+          <li>Cannot make payments</li>
+        </ul>
       </div>
-      <div class="graph-wrap" id="graphWrap">
-        <div class="graph-caption" id="graphCaption">BASELINE CAPABILITY GRAPH</div>
-        <svg class="edges" viewBox="0 0 700 425" preserveAspectRatio="none" aria-hidden="true">
-          <path id="e12" class="edge-line" d="M145 118 C235 118, 250 118, 330 118"/>
-          <path id="e23" class="edge-line" d="M445 118 C515 118, 535 118, 610 118"/>
-          <path id="e14" class="edge-line" d="M145 150 C170 240, 215 275, 280 310"/>
-          <path id="e35" class="edge-line" d="M610 150 C585 240, 535 275, 475 310"/>
-          <path id="e45" class="edge-line" d="M335 320 C380 320, 420 320, 465 320"/>
-          <text id="l12" class="edge-label" x="220" y="108">reads</text>
-          <text id="l23" class="edge-label" x="505" y="108">delegates</text>
-          <text id="l45" class="edge-label" x="375" y="309">executes</text>
-        </svg>
-        <div class="node n1" data-node="0"><span class="node-badge"></span><div class="node-type">Agent</div><div class="node-title" id="n1title"></div><div class="node-sub" id="n1sub"></div></div>
-        <div class="node n2" data-node="1"><span class="node-badge"></span><div class="node-type">Agent</div><div class="node-title" id="n2title"></div><div class="node-sub" id="n2sub"></div></div>
-        <div class="node n3" data-node="2"><span class="node-badge"></span><div class="node-type">Agent</div><div class="node-title" id="n3title"></div><div class="node-sub" id="n3sub"></div></div>
-        <div class="node n4" data-node="3"><span class="node-badge"></span><div class="node-type">System</div><div class="node-title" id="n4title"></div><div class="node-sub" id="n4sub"></div></div>
-        <div class="node n5" data-node="4"><span class="node-badge"></span><div class="node-type">Capability</div><div class="node-title" id="n5title"></div><div class="node-sub" id="n5sub"></div></div>
-      </div>
-      <div class="diffbar">
-        <div class="metric"><div class="metric-label">New authority</div><div class="metric-value" id="mAuthority">0</div></div>
-        <div class="metric"><div class="metric-label">Critical regressions</div><div class="metric-value" id="mCritical">0</div></div>
-        <div class="metric"><div class="metric-label">Policy invariants</div><div class="metric-value">12</div></div>
-        <div class="metric"><div class="metric-label">Release gate</div><div class="metric-value good" id="mGate">PASS</div></div>
-      </div>
-    </section>
 
-    <aside class="inspector">
-      <div>
-        <h3>Security assessment</h3>
-        <div class="risk-card"><div class="risk-head"><span class="risk-title">Release risk</span><span class="pill pass" id="riskPill">PASS</span></div><div class="risk-score green" id="riskScore">Low</div><div class="risk-copy" id="riskCopy">No new critical authority is reachable in the baseline.</div></div>
-        <div id="findingContainer"><div class="empty">Run the candidate analysis to inspect security regressions.</div></div>
+      <div class="arrow">→</div>
+
+      <div class="release">
+        <div class="release-label">After · proposed release</div>
+        <h3>Procurement Agent</h3>
+        <p>Same job, but with one new connection.</p>
+        <ul>
+          <li>Can read supplier records</li>
+          <li>Can update supplier information</li>
+          <li>Can now ask the Finance Agent to act</li>
+        </ul>
+        <div class="change">+ delegation to Finance Agent</div>
       </div>
-      <div class="detail"><h3>Selected change</h3><div class="detail-row"><span>Model</span><span id="dModel">Gemini 2.5</span></div><div class="detail-row"><span>Prompt</span><span id="dPrompt">procurement-v17</span></div><div class="detail-row"><span>Tools</span><span id="dTools">2</span></div><div class="detail-row"><span>Delegations</span><span id="dDelegation">0</span></div><div class="detail-row"><span>Behavioral delta</span><span id="dDelta">none</span></div></div>
-    </aside>
+    </div>
+
+    <div class="run-area">
+      <button class="run" id="run">Run ChangeFence</button>
+      <span class="hint">See what the code review does not make obvious</span>
+    </div>
+
+    <div class="result" id="result">
+      <div class="result-grid">
+        <div class="gate">
+          <div class="gate-label">Release decision</div>
+          <div class="gate-value">BLOCK</div>
+          <p>Critical security regression</p>
+        </div>
+        <div class="finding">
+          <h3>Procurement can now indirectly reach payment execution.</h3>
+          <p>The new version never directly gives Procurement permission to make a payment. But because Procurement can delegate to Finance, and Finance can execute payments, the combined system creates a new authority path.</p>
+          <div class="path">Procurement Agent<br>↓ <span class="new">NEW: delegates to Finance</span><br>Finance Agent<br>↓<br>Payment API · payment.execute</div>
+          <div class="plain"><strong>In plain English:</strong> nobody wrote “let Procurement make payments,” but the new connection makes that outcome possible. ChangeFence catches the consequence of the change, not just the changed line of code.</div>
+        </div>
+      </div>
+    </div>
   </div>
-</div>
 </section>
 
-<section class="story shell" id="how">
-  <div class="story-grid">
-    <div><div class="eyebrow">Why ChangeFence exists</div><h2>A code review shows what changed. It does not always show what became possible.</h2><p>Agent behavior depends on models, prompts, tools, permissions, data, and delegation. ChangeFence treats security as a release-to-release behavior problem, then turns violations into deterministic gates.</p></div>
-    <div class="steps"><div class="step"><div class="step-num">01</div><div><strong>Compare</strong><p>Load the known-good agent system and the proposed release.</p></div></div><div class="step"><div class="step-num">02</div><div><strong>Trace</strong><p>Compute newly reachable authority across agents, tools, and delegated actions.</p></div></div><div class="step"><div class="step-num">03</div><div><strong>Test</strong><p>Compare repeated adversarial outcomes between baseline and candidate.</p></div></div><div class="step"><div class="step-num">04</div><div><strong>Gate</strong><p>Block releases that violate a non-negotiable security invariant.</p></div></div></div>
+<section class="explain" id="how">
+  <h2>What ChangeFence does</h2>
+  <p>The product is intentionally simple: compare what the agent could do before with what it can do after the change.</p>
+  <div class="steps">
+    <div class="step"><div class="step-num">01 · COMPARE</div><h3>Before vs after</h3><p>Read the trusted agent configuration and the proposed release.</p></div>
+    <div class="step"><div class="step-num">02 · FIND</div><h3>New capabilities</h3><p>Follow tools and agent-to-agent delegation to find newly reachable actions.</p></div>
+    <div class="step"><div class="step-num">03 · GATE</div><h3>Allow or block</h3><p>Fail the release when a new capability violates a security rule.</p></div>
   </div>
-  <div style="height:42px"></div>
-  <div class="terminal"><div class="terminal-head">changefence compare security/baseline.yaml security/candidate.yaml</div><pre>CHANGEFENCE
 
-Baseline   main
-Candidate  release/284
-
-Security gate  <span class="t-red">FAIL</span>
-
-<span class="t-red">[CRITICAL] FIN-001</span>
-Procurement must never gain authority to execute payments.
-
-New authority path
-procurement → finance → payment.execute
-
-Suggested action  <span class="t-red">BLOCK RELEASE</span></pre></div>
+  <div class="local">
+    <h3>Optional local AI red team</h3>
+    <p>A local model through <code>Ollama</code> can propose attack ideas privately on your machine. ChangeFence then independently verifies whether those ideas are actually possible. The AI proposes; the deterministic engine decides.</p>
+  </div>
 </section>
 </main>
 
-<footer><div class="shell footer-inner"><span>ChangeFence · Open-source agent security change control</span><span>Created by Karteek Ponnuru · <a href="https://github.com/karteekponnuru/ChangeFence">GitHub ↗</a></span></div></footer>
+<footer><div class="wrap footer"><span>ChangeFence · Open-source AI agent security</span><a href="https://github.com/karteekponnuru/ChangeFence">Source on GitHub ↗</a></div></footer>
 
 <script>
-const scenarios={
- procurement:{
-  titles:['Supplier Intake','Procurement Agent','Finance Agent','Supplier Records','Payment API'],
-  subs:['email.read','supplier.write','invoice.approve','bank_account.write','payment.execute'],
-  finding:'FIN-001',title:'Transitive payment authority introduced',
-  path:['procurement','delegate:finance','finance','tool:payments','payment.execute'],
-  copy:'The candidate allows Procurement to delegate to Finance, making payment.execute indirectly reachable.',
-  model:['Gemini 2.5','Gemini 2.5'],prompt:['procurement-v17','procurement-v18'],tools:['2','2'],delegation:['0','1'],delta:['none','new critical path']
- },
- data:{
-  titles:['Support Agent','CRM Agent','Analytics Agent','Customer DB','External Export'],
-  subs:['ticket.read','customer.read','analytics.query','pii.read','data.export'],
-  finding:'DATA-004',title:'Customer data can cross the trust boundary',
-  path:['support','delegate:analytics','analytics','customer.pii.read','external.export'],
-  copy:'A new analytics delegation creates a route from support-controlled context to an external export capability.',
-  model:['Gemini 2.5','Gemini 2.5'],prompt:['support-v12','support-v12'],tools:['3','4'],delegation:['1','2'],delta:['none','exfiltration path']
- },
- deploy:{
-  titles:['Issue Agent','Coding Agent','CI Agent','Repository','Production Deploy'],
-  subs:['issue.read','code.write','workflow.trigger','repo.write','deploy.execute'],
-  finding:'PROD-007',title:'Coding workflow reaches production deployment',
-  path:['coding','trigger:ci','ci-agent','workflow:deploy','production.deploy'],
-  copy:'The candidate gives the CI agent a deployment tool, turning a normal code-writing path into production authority.',
-  model:['Gemini 2.5','Gemini 3'],prompt:['coding-v21','coding-v21'],tools:['4','5'],delegation:['1','1'],delta:['none','production path']
- }
-};
-let current='procurement',mode='baseline',analyzed=false;
-const $=id=>document.getElementById(id);
-function render(){
- const s=scenarios[current],candidate=mode==='candidate';
- s.titles.forEach((t,i)=>{$('n'+(i+1)+'title').textContent=t;$('n'+(i+1)+'sub').textContent=s.subs[i]});
- document.querySelectorAll('.node').forEach((n,i)=>{n.classList.remove('changed','safe');if(candidate&&(i===1||i===2||i===4))n.classList.add('changed');else if(!candidate&&i===4)n.classList.add('safe')});
- document.querySelectorAll('.edge-line').forEach(e=>e.classList.remove('changed','safe')); $('e12').classList.add('safe'); if(candidate){$('e23').classList.add('changed');$('e45').classList.add('changed')} else {$('e23').classList.add('safe')}
- $('l23').classList.toggle('changed',candidate);$('graphCaption').textContent=(candidate?'CANDIDATE':'BASELINE')+' CAPABILITY GRAPH';
- $('baselineBtn').classList.toggle('active',!candidate);$('candidateBtn').classList.toggle('active',candidate);
- $('mAuthority').textContent=candidate?'1':'0';$('mCritical').textContent=candidate&&analyzed?'1':'0';$('mCritical').className='metric-value'+(candidate&&analyzed?' bad':'');
- $('mGate').textContent=candidate&&analyzed?'FAIL':'PASS';$('mGate').className='metric-value '+(candidate&&analyzed?'bad':'good');
- $('riskPill').textContent=candidate&&analyzed?'CRITICAL':'PASS';$('riskPill').className='pill '+(candidate&&analyzed?'critical':'pass');
- $('riskScore').textContent=candidate&&analyzed?'Critical':'Low';$('riskScore').className='risk-score '+(candidate&&analyzed?'red':'green');
- $('riskCopy').textContent=candidate&&analyzed?s.copy:'No new critical authority is reachable in the '+(candidate?'candidate before analysis.':'baseline.') ;
- $('dModel').textContent=s.model[candidate?1:0];$('dPrompt').textContent=s.prompt[candidate?1:0];$('dTools').textContent=s.tools[candidate?1:0];$('dDelegation').textContent=s.delegation[candidate?1:0];$('dDelta').textContent=s.delta[candidate?1:0];
- if(candidate&&analyzed){$('findingContainer').innerHTML=`<div class="finding"><div class="finding-head"><div class="finding-code">${s.finding} · CRITICAL</div><h4>${s.title}</h4></div><div class="path">${s.path.map((p,i)=>i===s.path.length-1?`<span>${p}</span>`:p).join('<br>↓<br>')}</div></div>`} else {$('findingContainer').innerHTML='<div class="empty">'+(candidate?'Run the security diff to inspect this release.':'Baseline is the known-good reference release.')+'</div>'}
-}
-document.querySelectorAll('.scenario').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.scenario').forEach(x=>x.classList.remove('active'));b.classList.add('active');current=b.dataset.scenario;mode='baseline';analyzed=false;render()}));
-$('baselineBtn').onclick=()=>{mode='baseline';analyzed=false;render()};$('candidateBtn').onclick=()=>{mode='candidate';analyzed=false;render()};$('runBtn').onclick=()=>{mode='candidate';analyzed=true;render()};render();
+const run=document.getElementById('run');
+const result=document.getElementById('result');
+run.addEventListener('click',()=>{
+  result.classList.add('show');
+  run.textContent='Security regression found';
+  setTimeout(()=>result.scrollIntoView({behavior:'smooth',block:'nearest'}),80);
+});
 </script>
+<!-- GitHub Pages source: main /docs -->
 </body>
 </html>
-<!-- trigger GitHub Pages deployment -->
