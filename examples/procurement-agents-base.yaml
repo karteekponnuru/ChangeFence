@@ -1,0 +1,22 @@
+system: acme-procurement-baseline
+
+# Developer-owned agent architecture. Security policy lives separately.
+agents:
+  procurement:
+    model: gemini-enterprise
+    prompt_id: procurement-safe
+    tools: [supplier]
+  finance:
+    model: gemini-enterprise
+    prompt_id: finance-safe
+    tools: [payments]
+
+tools:
+  supplier:
+    capabilities:
+      - {name: supplier.read, severity: low}
+      - {name: supplier.bank_account.write, severity: high}
+  payments:
+    capabilities:
+      - {name: invoice.read, severity: low}
+      - {name: payment.execute, severity: critical}
