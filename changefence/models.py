@@ -33,12 +33,26 @@ class Invariant:
     severity: str = "critical"
 
 
+@dataclass(frozen=True)
+class ReviewRule:
+    id: str
+    origin_agent: str = "*"
+    capability: str = "*"
+    severity_at_least: str = "low"
+    evidence: str = "*"
+    approver: str = "security"
+    expires_minutes: int = 15
+    max_uses: int = 1
+    reason: str = "Security review required before execution."
+
+
 @dataclass
 class SystemSpec:
     name: str
     agents: Dict[str, Agent]
     tools: Dict[str, Tool]
     invariants: List[Invariant]
+    review_rules: List[ReviewRule] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
