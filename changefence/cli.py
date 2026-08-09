@@ -3,6 +3,12 @@ import json
 import sys
 from pathlib import Path
 
+from .approvals import (
+    ApprovalLeaseError,
+    issue_approval_lease,
+    secret_from_env,
+    validate_approval_lease,
+)
 from .behavior import BehaviorError, compare_behavior
 from .descriptors import DescriptorError, build_descriptor_context
 from .engine import compare
@@ -11,7 +17,7 @@ from .impact import build_impact_report, write_promptfoo_tests
 from .ledger import LedgerError, append_event, verify_ledger
 from .policy import build_policy_plan
 from .report import write_html
-from .runtime import RuntimeDecisionError, decide_action
+from .runtime import RuntimeDecisionError, authorize_action, decide_action
 from .semantic import SemanticError
 from .spec import SpecError, load_spec
 
@@ -22,6 +28,28 @@ def _render_path(path):
 
 def _load_compare(base, candidate, fail_on):
     return compare(load_spec(base), load_spec(candidate), fail_on=fail_on)
+
+
+def _read_optional(path):
+    if not path:
+        return ""
+    return Path(path).read_text(encoding="utf-8")
+
+
+def _read_json_file(path):
+    value = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise ApprovalLeaseError(f"Expected a JSON object in {path}.")
+    return value
+
+
+def _json_object(value, *, label):
+    if not value:
+        return {}
+    parsed = json.loads(value)
+    if not isinstance(parsed, dict):
+        raise ApprovalLeaseError(f"{label} must be a JSON object.")
+    return parsed
 
 
 def _print_structural(report):
@@ -90,10 +118,22 @@ def _print_impact(report):
             print(f"- {attack['id']} {attack['title']} -> {attack['target_capability']}")
 
 
-def _read_optional(path):
-    if not path:
-        return ""
-    return Path(path).read_text(encoding="utf-8")
+def _print_runtime(decision):
+    print("CHANGEFENCE RUNTIME")
+    print(f"Decision:   {decision['decision']}")
+    print(f"Origin:     {decision['origin_agent']}")
+    print(f"Capability: {decision['capability']}")
+    print(f"Reason:     {decision['reason']}")
+    if decision.get("review"):
+        review = decision["review"]
+        print(f"Reviewer:   {review['approver']}")
+        print(f"Approval:   {review['max_uses']} use(s), expires in {review['expires_minutes']} minutes")
+    if decision.get("authorization"):
+        auth = decision["authorization"]
+        print(f"Authorized: {auth['approved_by']} via {auth['rule_id']}")
+        print(f"Lease:      {auth['lease_id']} · remaining uses {auth['uses_remaining']}")
+    if decision.get("lease_validation") and not decision["lease_validation"].get("valid"):
+        print(f"Lease:      INVALID · {decision['lease_validation']['reason']}")
 
 
 def main():
@@ -126,7 +166,33 @@ def main():
     runtime_parser.add_argument("origin")
     runtime_parser.add_argument("capability")
     runtime_parser.add_argument("--executor")
+    runtime_parser.add_argument("--lease", help="Signed approval lease JSON to consume when the action requires REVIEW")
+    runtime_parser.add_argument("--usage-store", default=".changefence/approval-usage.json", help="Signed replay/usage state for approval leases")
+    runtime_parser.add_argument("--secret-env", default="CHANGEFENCE_APPROVAL_SECRET", help="Environment variable containing the approval signing secret")
+    runtime_parser.add_argument("--ledger", help="Optional ChangeFence Ledger to record a consumed approval")
     runtime_parser.add_argument("--json", action="store_true", dest="as_json")
+
+    approve_parser = sub.add_parser("approve", help="Issue a signed short-lived lease after a trusted host authenticates a reviewer")
+    approve_parser.add_argument("spec")
+    approve_parser.add_argument("origin")
+    approve_parser.add_argument("capability")
+    approve_parser.add_argument("--executor")
+    approve_parser.add_argument("--approved-by", required=True, help="Authenticated human identity supplied by the trusted host")
+    approve_parser.add_argument("--approver-group", required=True, help="Authenticated reviewer group/role supplied by the trusted host")
+    approve_parser.add_argument("--context", help="Optional JSON object, for example '{\"pr\":284,\"ticket\":\"SEC-91\"}'")
+    approve_parser.add_argument("--secret-env", default="CHANGEFENCE_APPROVAL_SECRET")
+    approve_parser.add_argument("--out", default="changefence-approval.json")
+    approve_parser.add_argument("--ledger", help="Optional ChangeFence Ledger to record lease issuance")
+
+    approval_verify = sub.add_parser("approval-verify", help="Validate an approval lease without consuming it")
+    approval_verify.add_argument("spec")
+    approval_verify.add_argument("origin")
+    approval_verify.add_argument("capability")
+    approval_verify.add_argument("lease")
+    approval_verify.add_argument("--executor")
+    approval_verify.add_argument("--usage-store", default=".changefence/approval-usage.json")
+    approval_verify.add_argument("--secret-env", default="CHANGEFENCE_APPROVAL_SECRET")
+    approval_verify.add_argument("--json", action="store_true", dest="as_json")
 
     policy_parser = sub.add_parser("policy", help="Generate reviewable control recommendations from an Impact report")
     policy_parser.add_argument("base")
@@ -196,25 +262,85 @@ def main():
             raise SystemExit(1 if report["decision"] == "BLOCK" else 0)
 
         if args.command == "runtime":
+            spec = load_spec(args.spec)
+            lease = _read_json_file(args.lease) if args.lease else None
+            secret = secret_from_env(args.secret_env) if lease else None
+            decision = authorize_action(
+                spec,
+                origin_agent=args.origin,
+                executor_agent=args.executor,
+                capability=args.capability,
+                approval_lease=lease,
+                approval_secret=secret,
+                usage_path=args.usage_store if lease else None,
+                consume=True,
+            )
+            if args.ledger and decision.get("authorization"):
+                append_event(
+                    args.ledger,
+                    event_type="approval_lease_consumed",
+                    payload={
+                        "origin_agent": decision["origin_agent"],
+                        "executor_agent": decision.get("executor_agent"),
+                        "capability": decision["capability"],
+                        "authorization": decision["authorization"],
+                    },
+                )
+            print(json.dumps(decision, indent=2)) if args.as_json else _print_runtime(decision)
+            raise SystemExit(1 if decision["decision"] == "BLOCK" else 3 if decision["decision"] == "REVIEW" else 0)
+
+        if args.command == "approve":
+            spec = load_spec(args.spec)
             decision = decide_action(
-                load_spec(args.spec),
+                spec,
                 origin_agent=args.origin,
                 executor_agent=args.executor,
                 capability=args.capability,
             )
-            if args.as_json:
-                print(json.dumps(decision, indent=2))
-            else:
-                print("CHANGEFENCE RUNTIME")
-                print(f"Decision:   {decision['decision']}")
-                print(f"Origin:     {decision['origin_agent']}")
-                print(f"Capability: {decision['capability']}")
-                print(f"Reason:     {decision['reason']}")
-                if decision.get("review"):
-                    review = decision["review"]
-                    print(f"Reviewer:   {review['approver']}")
-                    print(f"Approval:   {review['max_uses']} use(s), expires in {review['expires_minutes']} minutes")
-            raise SystemExit(1 if decision["decision"] == "BLOCK" else 3 if decision["decision"] == "REVIEW" else 0)
+            secret = secret_from_env(args.secret_env)
+            lease = issue_approval_lease(
+                spec,
+                decision,
+                approved_by=args.approved_by,
+                approver_group=args.approver_group,
+                secret=secret,
+                context=_json_object(args.context, label="Approval context"),
+            )
+            Path(args.out).write_text(json.dumps(lease, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            if args.ledger:
+                append_event(
+                    args.ledger,
+                    event_type="approval_lease_issued",
+                    payload={key: value for key, value in lease.items() if key != "signature"},
+                )
+            print("CHANGEFENCE APPROVAL")
+            print(f"Lease:      {lease['lease_id']}")
+            print(f"Approved by:{lease['approved_by']}")
+            print(f"Scope:      {lease['origin_agent']} -> {lease['capability']}")
+            print(f"Expires:    {lease['expires_at']}")
+            print(f"Max uses:   {lease['max_uses']}")
+            print(f"Written:    {args.out}")
+            raise SystemExit(0)
+
+        if args.command == "approval-verify":
+            spec = load_spec(args.spec)
+            decision = decide_action(
+                spec,
+                origin_agent=args.origin,
+                executor_agent=args.executor,
+                capability=args.capability,
+            )
+            result = validate_approval_lease(
+                spec,
+                decision,
+                _read_json_file(args.lease),
+                secret=secret_from_env(args.secret_env),
+                usage_path=args.usage_store,
+            )
+            print(json.dumps(result, indent=2)) if args.as_json else print(
+                f"CHANGEFENCE APPROVAL: {'VALID' if result['valid'] else 'INVALID'} · {result['reason']}"
+            )
+            raise SystemExit(0 if result["valid"] else 1)
 
         if args.command == "policy":
             report = build_impact_report(load_spec(args.base), load_spec(args.candidate), fail_on=args.fail_on)
@@ -281,7 +407,18 @@ def main():
             print(f"ChangeFence report written to {path}")
             combined_fail = structural["status"] == "FAIL" or (behavior and behavior["status"] == "FAIL")
             raise SystemExit(1 if combined_fail else 0)
-    except (SpecError, BehaviorError, HypothesisError, SemanticError, DescriptorError, RuntimeDecisionError, LedgerError, json.JSONDecodeError, OSError) as exc:
+    except (
+        SpecError,
+        BehaviorError,
+        HypothesisError,
+        SemanticError,
+        DescriptorError,
+        RuntimeDecisionError,
+        ApprovalLeaseError,
+        LedgerError,
+        json.JSONDecodeError,
+        OSError,
+    ) as exc:
         print(f"ChangeFence error: {exc}", file=sys.stderr)
         raise SystemExit(2)
 
