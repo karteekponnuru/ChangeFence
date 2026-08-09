@@ -1,0 +1,63 @@
+{
+  "scenario": "procurement-delegation",
+  "title": "Procurement → payment execution",
+  "domain": "Finance",
+  "change": "+ delegation to Finance Agent",
+  "plain_english": "A new delegation edge lets Procurement reach Finance capabilities, including payment execution.",
+  "base_file": "examples/procurement-base.yaml",
+  "candidate_file": "examples/procurement-candidate.yaml",
+  "result": {
+    "decision": "BLOCK",
+    "decision_reason": "A newly introduced deterministic authority path violates a configured security invariant.",
+    "summary": {
+      "structural_changes": 2,
+      "proven_new_capabilities": 2,
+      "inferred_new_capabilities": 0,
+      "semantic_risks": 0,
+      "targeted_tests": 0,
+      "gate_violations": 1
+    },
+    "proven_findings": [
+      {
+        "id": "CAP-001",
+        "evidence_level": "PROVEN",
+        "kind": "capability_delta",
+        "source_agent": "procurement",
+        "capability": "invoice.read",
+        "severity": "low",
+        "path": ["procurement", "delegate:finance", "finance", "tool:payments", "cap:invoice.read"],
+        "reason": "Deterministically reachable in candidate and not reachable in baseline."
+      },
+      {
+        "id": "CAP-002",
+        "evidence_level": "PROVEN",
+        "kind": "capability_delta",
+        "source_agent": "procurement",
+        "capability": "payment.execute",
+        "severity": "critical",
+        "path": ["procurement", "delegate:finance", "finance", "tool:payments", "cap:payment.execute"],
+        "reason": "Deterministically reachable in candidate and not reachable in baseline."
+      }
+    ],
+    "gate_violations": [
+      {
+        "id": "FIN-001",
+        "description": "Procurement must never gain authority to execute payments.",
+        "source_agent": "procurement",
+        "capability": "payment.execute",
+        "severity": "critical",
+        "path": ["procurement", "delegate:finance", "finance", "tool:payments", "cap:payment.execute"],
+        "new_in_candidate": true
+      }
+    ],
+    "structural_changes": [
+      {"type": "prompt_changed", "agent": "procurement", "before": "procurement-safe", "after": "procurement-with-finance-handoff", "risk": "review"},
+      {"type": "delegation_added", "agent": "procurement", "target": "finance", "risk": "high"}
+    ],
+    "evidence_contract": {
+      "PROVEN": "Derived deterministically from declared architecture and reachability.",
+      "HYPOTHESIZED": "LLM-assisted semantic inference; requires human review or runtime verification.",
+      "VERIFIED": "Reserved for evidence returned by an external execution/evaluation harness."
+    }
+  }
+}
