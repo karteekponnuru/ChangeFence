@@ -8,6 +8,7 @@ __all__ = [
     "hypotheses",
     "policy",
     "runtime",
+    "approvals",
     "ledger",
     "behavior",
     "spec",
