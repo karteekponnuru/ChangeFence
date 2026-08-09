@@ -4,85 +4,115 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="theme-color" content="#0b0d10" />
-<title>ChangeFence — AI security from change to runtime</title>
-<meta name="description" content="ChangeFence connects change impact, targeted security testing, policy, runtime decisions, and evidence across the AI-agent lifecycle." />
+<title>ChangeFence — Know what an AI-agent change actually enables</title>
+<meta name="description" content="ChangeFence detects the security authority created by AI-agent changes and evaluates it against security-owned policy before deployment and at runtime." />
 <link rel="stylesheet" href="app.css" />
 </head>
 <body>
-<header class="top"><div class="wrap"><a class="brand" href="#">ChangeFence</a><nav class="nav"><a href="#suite">Suite</a><a href="#demo">Live results</a><a href="https://github.com/karteekponnuru/ChangeFence">GitHub ↗</a></nav></div></header>
+<header class="top"><div class="wrap top-inner"><a class="brand" href="#">ChangeFence</a><nav class="nav"><a href="#use-case">Use case</a><a href="#runtime">Runtime</a><a href="#integrate">Integrate</a><a href="https://github.com/karteekponnuru/ChangeFence">GitHub ↗</a></nav></div></header>
 
-<main class="wrap">
-<section class="hero">
-  <div class="eyebrow">AI agent security platform</div>
-  <h1>Know what changed. Control what it enables.</h1>
-  <p>ChangeFence connects <strong>change impact</strong>, <strong>targeted security testing</strong>, <strong>policy</strong>, <strong>runtime decisions</strong>, and <strong>evidence</strong> across the AI-agent lifecycle.</p>
-  <div class="hero-actions"><a class="btn primary" href="#demo">Run real examples</a><a class="btn" href="https://github.com/karteekponnuru/ChangeFence">View source</a></div>
+<main>
+<section class="hero wrap">
+  <div class="eyebrow">AI agent security · change to runtime</div>
+  <h1>A developer changed one agent. The system quietly gained payment authority.</h1>
+  <p class="hero-copy">ChangeFence finds the security consequence hidden behind an AI-agent change, checks it against a <strong>separate security-owned policy</strong>, and explains exactly why the release should pass, require review, or be blocked.</p>
+  <div class="hero-actions"><a class="btn primary" href="#use-case">See the real example</a><a class="btn" href="https://github.com/karteekponnuru/ChangeFence">View source</a></div>
+  <div class="trust-row"><span>Developer-owned agent config</span><span>Security-owned ground truth</span><span>Engine-backed result</span></div>
 </section>
 
-<div class="module-strip" aria-label="ChangeFence modules">
-  <div class="module"><b>Impact</b><span>Change → security consequence</span></div>
-  <div class="module"><b>Probe</b><span>Change-directed security tests</span></div>
-  <div class="module"><b>Policy</b><span>Reviewable control plans</span></div>
-  <div class="module"><b>Runtime</b><span>Allow · Review · Block</span></div>
-  <div class="module"><b>Ledger</b><span>Tamper-evident evidence</span></div>
-</div>
+<section class="section wrap" id="use-case">
+  <div class="section-title"><div class="eyebrow">The use case</div><h2>The change looked reasonable.</h2><p>Procurement occasionally needs Finance to help with invoice questions. A developer adds one handoff.</p></div>
 
-<section class="section" id="demo">
-  <div class="section-head"><div><div class="truth">Engine-backed demo</div><h2>Run actual repository examples</h2></div><p>The results below are not invented in this webpage. They are JSON artifacts generated from the ChangeFence Python engine and checked for drift in CI.</p></div>
-  <div class="demo">
-    <div class="demo-top"><strong>ChangeFence Impact</strong><span class="engine-label">build_impact_report · deterministic mode</span></div>
-    <div class="scenario-tabs">
-      <button class="scenario-tab active" data-scenario="procurement-delegation">Payments</button>
-      <button class="scenario-tab" data-scenario="support-pii-export">Customer PII</button>
-      <button class="scenario-tab" data-scenario="coding-production-deploy">Production deploy</button>
-      <button class="scenario-tab" data-scenario="safe-prompt-update">Safe change</button>
-    </div>
-    <div class="demo-body">
-      <div class="scenario-intro">
-        <div class="box"><div class="label">Scenario</div><h3 id="scenarioTitle"></h3><p id="scenarioCopy"></p></div>
-        <div class="box"><div class="label">Source change</div><h3 id="scenarioDomain"></h3><div class="change-line" id="scenarioChange"></div><div class="source-links"><a id="baseLink" href="#">Baseline YAML ↗</a><a id="candidateLink" href="#">Candidate YAML ↗</a><a id="jsonLink" href="#">Engine result JSON ↗</a></div></div>
-      </div>
-      <div class="run-row"><button class="btn primary" id="runExample">Load engine result</button><div class="run-note">The browser fetches the committed result artifact for this scenario. CI regenerates it from the Python engine and fails if it differs.</div></div>
-      <div class="result" id="result" aria-live="polite">
-        <div class="result-summary">
-          <div class="decision" id="decisionCard"><div class="label">Release decision</div><div class="decision-value" id="decisionValue">—</div><small id="decisionReason"></small></div>
-          <div><h3 class="finding-title" id="findingTitle"></h3><p class="finding-copy" id="findingCopy"></p><div class="metrics" id="metrics"></div><span class="evidence" id="evidenceBadge">PROVEN</span><div class="path" id="findingPath"></div><div class="violation" id="violation"></div><div class="empty" id="emptyResult" hidden></div></div>
-        </div>
+  <div class="two-col">
+    <article class="panel">
+      <div class="panel-head"><span class="step">1</span><div><div class="label">Developer-controlled file</div><h3>Agent change</h3></div></div>
+      <p>The developer intends to let Procurement ask Finance for help.</p>
+      <pre><span class="muted">procurement:</span>
+  tools: [supplier]
+<span class="added">+ delegates_to: [finance]</span></pre>
+      <div class="note">The developer did <strong>not</strong> explicitly grant payment permission.</div>
+      <a class="text-link" href="https://github.com/karteekponnuru/ChangeFence/blob/main/examples/procurement-agents-candidate.yaml">Open developer YAML ↗</a>
+    </article>
+
+    <article class="panel policy-panel">
+      <div class="panel-head"><span class="step">2</span><div><div class="label">Security-controlled file</div><h3>Company ground truth</h3></div></div>
+      <p class="policy-name">ACME Agent Security Policy <strong>v3.2</strong></p>
+      <div class="rule"><span>FIN-001 · CRITICAL</span><strong>Procurement must never gain authority to execute payments.</strong></div>
+      <div class="policy-meta"><span>Owner: Enterprise Security</span><span>Approved: CISO + Finance Risk</span></div>
+      <div class="note">When <code>--policy</code> is supplied, rules inside the developer's agent file are ignored. The separate policy is authoritative.</div>
+      <a class="text-link" href="https://github.com/karteekponnuru/ChangeFence/blob/main/examples/acme-security-policy.yaml">Open security policy ↗</a>
+    </article>
+  </div>
+
+  <div class="analysis-panel">
+    <div class="panel-head"><span class="step">3</span><div><div class="label">ChangeFence Impact</div><h3>What did that small change actually enable?</h3></div></div>
+    <p>ChangeFence compares the approved baseline with the proposed version and follows tools plus agent-to-agent delegation.</p>
+    <button class="btn primary" id="runImpact">Run this exact repository example</button>
+    <div class="impact-result" id="impactResult" aria-live="polite" hidden>
+      <div class="decision-card block"><div class="label">Release decision</div><div class="decision-value">BLOCK</div><div id="decisionReason"></div></div>
+      <div class="result-body">
+        <div class="label">New authority discovered</div>
+        <div class="authority-path" id="authorityPath"></div>
+        <div class="result-callout"><strong>The code never said “let Procurement pay.”</strong><span>The new delegation makes payment execution reachable indirectly.</span></div>
+        <div class="ground-truth" id="groundTruth"></div>
+        <div class="metrics" id="impactMetrics"></div>
       </div>
     </div>
   </div>
 </section>
 
-<section class="section" id="suite">
-  <div class="section-head"><div><div class="truth">One lifecycle</div><h2>From PR to runtime evidence</h2></div><p>Every module shares the same security objects: capabilities, causal origin, invariants, evidence levels, and decisions.</p></div>
-  <div class="suite-grid">
-    <div class="suite-nav">
-      <button class="suite-btn active" data-module="impact"><b>Impact</b><span>What security changed?</span></button>
-      <button class="suite-btn" data-module="probe"><b>Probe</b><span>How should it be tested?</span></button>
-      <button class="suite-btn" data-module="policy"><b>Policy</b><span>What should control it?</span></button>
-      <button class="suite-btn" data-module="runtime"><b>Runtime</b><span>Should this action execute?</span></button>
-      <button class="suite-btn" data-module="ledger"><b>Ledger</b><span>What evidence do we retain?</span></button>
-    </div>
-    <div class="suite-detail" id="suiteDetail" aria-live="polite"></div>
+<section class="section alt" id="runtime"><div class="wrap">
+  <div class="section-title"><div class="eyebrow">Live agent</div><h2>Not every sensitive action should be blocked.</h2><p>Suppose Procurement is allowed to update a supplier bank account, but only after a human security review.</p></div>
+
+  <div class="runtime-story">
+    <div class="runtime-card"><div class="label">Agent action</div><strong>Update supplier bank account</strong><p>This capability exists and is reachable.</p></div>
+    <div class="runtime-card"><div class="label">Security rule · REV-001</div><strong>Human approval required</strong><p>Procurement Security · 15 minutes · 1 use.</p></div>
+    <div class="runtime-card decision-runtime" id="runtimeDecision"><div class="label">ChangeFence Runtime</div><strong id="runtimeStatus">REVIEW</strong><p id="runtimeCopy">The action pauses until the configured reviewer approves it.</p></div>
+  </div>
+  <button class="btn" id="applyApproval">Apply engine-generated one-use approval lease</button>
+  <div class="approval-detail" id="approvalDetail" hidden></div>
+</div></section>
+
+<section class="section wrap" id="integrate">
+  <div class="section-title"><div class="eyebrow">Where it fits</div><h2>Use the same policy before deployment and during execution.</h2></div>
+  <div class="two-col">
+    <article class="panel"><div class="label">Before deployment · GitHub / CI</div><h3>Catch dangerous authority changes</h3><pre>changefence impact \
+  agents/base.yaml \
+  agents/candidate.yaml \
+  --policy security/company-policy.yaml</pre><p>A developer changes the agent. Security controls the policy file. ChangeFence evaluates the proposed capability graph against that policy.</p></article>
+    <article class="panel"><div class="label">Live pipeline · before a tool call</div><h3>Control sensitive actions</h3><pre>changefence runtime \
+  agents/live.yaml \
+  procurement \
+  supplier.bank_account.write \
+  --policy security/company-policy.yaml</pre><p>The application calls ChangeFence before a sensitive tool executes and receives <strong>ALLOW</strong>, <strong>REVIEW</strong>, or <strong>BLOCK</strong>.</p></article>
   </div>
 
-  <div class="review-example">
-    <div class="truth">Configurable human review</div>
-    <pre>reviews:
-  - id: REV-001
-    match:
-      origin: procurement
-      capability: supplier.bank_account.write
-      severity_at_least: high
-    require:
-      approver: procurement-security
-      expires_minutes: 15
-      max_uses: 1</pre>
+  <div class="ownership">
+    <div><div class="label">Developer team owns</div><code>agents/</code><p>Prompts, tools, delegation, models and agent architecture.</p></div>
+    <div><div class="label">Security team owns</div><code>security/company-policy.yaml</code><p>Approved invariants, review rules, policy version and provenance.</p></div>
+    <div><div class="label">ChangeFence computes</div><code>decision + evidence</code><p>Capability delta, causal path, policy rule and decision.</p></div>
   </div>
+</section>
+
+<section class="section compact alt"><div class="wrap">
+  <div class="section-title"><div class="eyebrow">The suite</div><h2>One security story across the agent lifecycle.</h2></div>
+  <div class="module-grid">
+    <div><strong>Impact</strong><span>What authority did the change create?</span></div>
+    <div><strong>Probe</strong><span>How should that new risk be tested?</span></div>
+    <div><strong>Policy</strong><span>What control should mitigate it?</span></div>
+    <div><strong>Runtime</strong><span>Should this action execute now?</span></div>
+    <div><strong>Ledger</strong><span>What evidence do we retain?</span></div>
+  </div>
+  <p class="boundary">LLMs may help interpret messy prompts, APIs and tool descriptions. They do not get to invent a deterministic security verdict.</p>
+</div></section>
+
+<section class="section wrap more-examples">
+  <div class="section-title"><div class="eyebrow">More reproducible examples</div><h2>The same engine also covers other authority changes.</h2></div>
+  <div class="example-links"><a href="demo-data/support-pii-export.json">Support → customer PII export</a><a href="demo-data/coding-production-deploy.json">Coding agent → production deploy</a><a href="demo-data/safe-prompt-update.json">Safe prompt-only change</a></div>
 </section>
 </main>
 
-<footer class="footer"><div class="wrap footer-inner"><span>ChangeFence · AI security from change to runtime</span><span><a href="https://github.com/karteekponnuru/ChangeFence">Source</a> · <a href="https://github.com/karteekponnuru/ChangeFence/tree/main/examples">Examples</a></span></div></footer>
+<footer><div class="wrap footer-inner"><span>ChangeFence · Your code diff is not your agent diff.</span><span><a href="https://github.com/karteekponnuru/ChangeFence">GitHub</a> · <a href="https://github.com/karteekponnuru/ChangeFence/tree/main/examples">Examples</a></span></div></footer>
 <script src="app.js"></script>
 </body>
 </html>
