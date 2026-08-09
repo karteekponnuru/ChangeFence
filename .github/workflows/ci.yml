@@ -1,0 +1,27 @@
+name: Test ChangeFence
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -e ".[dev]"
+      - run: pytest
+      - name: Verify known unsafe example is blocked
+        shell: bash
+        run: |
+          set +e
+          changefence compare examples/procurement-base.yaml examples/procurement-candidate.yaml
+          code=$?
+          set -e
+          test "$code" -eq 1
+      - name: Verify safe example passes
+        run: changefence compare examples/procurement-base.yaml examples/procurement-safe-candidate.yaml
