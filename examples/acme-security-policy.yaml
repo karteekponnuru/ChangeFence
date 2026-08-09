@@ -1,0 +1,28 @@
+policy:
+  name: ACME Agent Security Policy
+  version: "3.2"
+  owner: Enterprise Security
+  source: Corporate Payment Control Standard
+  approved_by: CISO + Finance Risk
+  effective_from: "2026-08-01"
+
+# Security-owned ground truth. Developers should not edit this in agent PRs.
+invariants:
+  - id: FIN-001
+    severity: critical
+    description: Procurement must never gain authority to execute payments.
+    forbid_reachability:
+      from: procurement
+      to: payment.execute
+
+reviews:
+  - id: REV-001
+    match:
+      origin: procurement
+      capability: supplier.bank_account.write
+      severity_at_least: high
+    require:
+      approver: procurement-security
+      expires_minutes: 15
+      max_uses: 1
+      reason: Human approval required for sensitive supplier-bank changes.
