@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from .engine import SEVERITY_RANK, analyze, index_by_pair
 from .models import ReviewRule, SystemSpec
+from .spec import policy_authority_dict
 
 
 class RuntimeDecisionError(ValueError):
@@ -40,6 +41,10 @@ def _review_requirement(rule: ReviewRule | None, *, reason: str) -> dict:
     }
 
 
+def _decision(spec: SystemSpec, payload: dict) -> dict:
+    return {**payload, "policy_authority": policy_authority_dict(spec)}
+
+
 def _matching_review_rule(
     spec: SystemSpec,
     *,
@@ -61,7 +66,6 @@ def _matching_review_rule(
         matches.append(rule)
     if not matches:
         return None
-    # Prefer the most specific and most security-sensitive matching rule.
     matches.sort(
         key=lambda rule: (
             rule.origin_agent != "*",
@@ -107,7 +111,7 @@ def decide_action(
     ]
     if matching_invariants:
         inv = sorted(matching_invariants, key=lambda item: item.id)[0]
-        return {
+        return _decision(spec, {
             "decision": "BLOCK",
             "origin_agent": origin_agent,
             "executor_agent": executor_agent,
@@ -121,12 +125,12 @@ def decide_action(
             "review": None,
             "evidence_level": "PROVEN",
             "path": [],
-        }
+        })
 
     severity = _capability_severity(spec, capability)
     if severity is None:
         reason = "Capability is not represented in the current ChangeFence model."
-        return {
+        return _decision(spec, {
             "decision": "REVIEW",
             "origin_agent": origin_agent,
             "executor_agent": executor_agent,
@@ -137,13 +141,13 @@ def decide_action(
             "review": _review_requirement(None, reason=reason),
             "evidence_level": "UNKNOWN",
             "path": [],
-        }
+        })
 
     reachable = index_by_pair(analyze(spec))
     item = reachable.get((origin_agent, capability))
     if not item:
         reason = "Capability exists in the model but is not declared reachable from the causal origin."
-        return {
+        return _decision(spec, {
             "decision": "REVIEW",
             "origin_agent": origin_agent,
             "executor_agent": executor_agent,
@@ -154,7 +158,7 @@ def decide_action(
             "review": _review_requirement(None, reason=reason),
             "evidence_level": "PROVEN",
             "path": [],
-        }
+        })
 
     rule = _matching_review_rule(
         spec,
@@ -164,7 +168,7 @@ def decide_action(
         evidence="PROVEN",
     )
     if rule:
-        return {
+        return _decision(spec, {
             "decision": "REVIEW",
             "origin_agent": origin_agent,
             "executor_agent": executor_agent,
@@ -175,9 +179,9 @@ def decide_action(
             "review": _review_requirement(rule, reason=rule.reason),
             "evidence_level": "PROVEN",
             "path": list(item.path),
-        }
+        })
 
-    return {
+    return _decision(spec, {
         "decision": "ALLOW",
         "origin_agent": origin_agent,
         "executor_agent": executor_agent,
@@ -188,7 +192,7 @@ def decide_action(
         "review": None,
         "evidence_level": "PROVEN",
         "path": list(item.path),
-    }
+    })
 
 
 def authorize_action(
