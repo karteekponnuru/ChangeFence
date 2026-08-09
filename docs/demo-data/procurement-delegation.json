@@ -3,12 +3,22 @@
   "title": "Procurement → payment execution",
   "domain": "Finance",
   "change": "+ delegation to Finance Agent",
-  "plain_english": "A new delegation edge lets Procurement reach Finance capabilities, including payment execution.",
-  "base_file": "examples/procurement-base.yaml",
-  "candidate_file": "examples/procurement-candidate.yaml",
+  "plain_english": "A developer only added a Finance handoff. ChangeFence discovered that this also makes payment execution reachable from Procurement.",
+  "base_file": "examples/procurement-agents-base.yaml",
+  "candidate_file": "examples/procurement-agents-candidate.yaml",
+  "policy_file": "examples/acme-security-policy.yaml",
   "result": {
     "decision": "BLOCK",
     "decision_reason": "A newly introduced deterministic authority path violates a configured security invariant.",
+    "policy_authority": {
+      "name": "ACME Agent Security Policy",
+      "version": "3.2",
+      "owner": "Enterprise Security",
+      "source": "Corporate Payment Control Standard",
+      "approved_by": "CISO + Finance Risk",
+      "effective_from": "2026-08-01",
+      "digest": "f1bdd1fafff99afc01be0ac8a09b628c9d209031ee0675ccfc1a20daa703934f"
+    },
     "summary": {
       "structural_changes": 2,
       "proven_new_capabilities": 2,
@@ -25,7 +35,13 @@
         "source_agent": "procurement",
         "capability": "invoice.read",
         "severity": "low",
-        "path": ["procurement", "delegate:finance", "finance", "tool:payments", "cap:invoice.read"],
+        "path": [
+          "procurement",
+          "delegate:finance",
+          "finance",
+          "tool:payments",
+          "cap:invoice.read"
+        ],
         "reason": "Deterministically reachable in candidate and not reachable in baseline."
       },
       {
@@ -35,7 +51,13 @@
         "source_agent": "procurement",
         "capability": "payment.execute",
         "severity": "critical",
-        "path": ["procurement", "delegate:finance", "finance", "tool:payments", "cap:payment.execute"],
+        "path": [
+          "procurement",
+          "delegate:finance",
+          "finance",
+          "tool:payments",
+          "cap:payment.execute"
+        ],
         "reason": "Deterministically reachable in candidate and not reachable in baseline."
       }
     ],
@@ -46,13 +68,30 @@
         "source_agent": "procurement",
         "capability": "payment.execute",
         "severity": "critical",
-        "path": ["procurement", "delegate:finance", "finance", "tool:payments", "cap:payment.execute"],
+        "path": [
+          "procurement",
+          "delegate:finance",
+          "finance",
+          "tool:payments",
+          "cap:payment.execute"
+        ],
         "new_in_candidate": true
       }
     ],
     "structural_changes": [
-      {"type": "prompt_changed", "agent": "procurement", "before": "procurement-safe", "after": "procurement-with-finance-handoff", "risk": "review"},
-      {"type": "delegation_added", "agent": "procurement", "target": "finance", "risk": "high"}
+      {
+        "type": "prompt_changed",
+        "agent": "procurement",
+        "before": "procurement-safe",
+        "after": "procurement-with-finance-handoff",
+        "risk": "review"
+      },
+      {
+        "type": "delegation_added",
+        "agent": "procurement",
+        "target": "finance",
+        "risk": "high"
+      }
     ],
     "evidence_contract": {
       "PROVEN": "Derived deterministically from declared architecture and reachability.",
