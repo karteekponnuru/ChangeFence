@@ -4,117 +4,85 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="theme-color" content="#0b0d10" />
-<title>ChangeFence — Security change control for AI agents</title>
-<meta name="description" content="See whether a change made an AI agent more dangerous before it reaches production." />
-<style>
-:root{
-  --bg:#0b0d10;--panel:#111419;--panel2:#15191e;--border:#262c33;--text:#f4f6f7;
-  --muted:#9ca6af;--faint:#6d7780;--green:#65d38d;--green-bg:#102019;
-  --red:#ff747b;--red-bg:#251416;--blue:#8bb4ff;--amber:#e7be74;
-}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.55}a{color:inherit;text-decoration:none}button{font:inherit}.wrap{max-width:1080px;margin:auto;padding:0 24px}.top{height:64px;border-bottom:1px solid var(--border);display:flex;align-items:center;background:rgba(11,13,16,.95);position:sticky;top:0;z-index:10}.top .wrap{width:100%;display:flex;justify-content:space-between;align-items:center}.brand{font-weight:750;letter-spacing:-.02em}.nav{display:flex;gap:20px;color:var(--muted);font-size:13px}.nav a:hover{color:var(--text)}
-.hero{padding:76px 0 50px}.eyebrow{font:600 11px/1 ui-monospace,SFMono-Regular,Menlo,monospace;text-transform:uppercase;letter-spacing:.12em;color:var(--green);margin-bottom:16px}.hero h1{font-size:clamp(42px,7vw,72px);line-height:1.03;letter-spacing:-.055em;max-width:850px;margin:0 0 20px}.hero p{max-width:680px;font-size:18px;color:var(--muted);margin:0}.hero strong{color:var(--text)}
-.demo{border:1px solid var(--border);border-radius:14px;background:var(--panel);overflow:hidden;margin-bottom:86px}.demo-head{padding:16px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}.demo-head span:first-child{font-weight:650;font-size:14px}.demo-head span:last-child{font:500 11px/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--faint)}
-.story{padding:28px}.question{font-size:14px;color:var(--muted);margin-bottom:18px}.compare{display:grid;grid-template-columns:1fr 48px 1fr;align-items:stretch}.release{border:1px solid var(--border);border-radius:11px;background:var(--panel2);padding:20px}.release-label{font:600 10px/1 ui-monospace,SFMono-Regular,Menlo,monospace;text-transform:uppercase;letter-spacing:.1em;color:var(--faint)}.release h3{margin:9px 0 8px;font-size:18px}.release p{margin:0;color:var(--muted);font-size:13px}.release ul{padding-left:18px;margin:15px 0 0;color:#c6ccd1;font-size:13px}.release li{margin:6px 0}.change{margin-top:14px;border-top:1px solid var(--border);padding-top:14px;font:600 12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--red)}.arrow{display:grid;place-items:center;color:var(--faint);font-size:22px}
-.run-area{text-align:center;padding:26px 0 8px}.run{border:0;border-radius:8px;background:var(--text);color:#0b0d10;padding:11px 18px;font-weight:700;cursor:pointer}.run:hover{background:#dfe3e6}.hint{display:block;margin-top:9px;color:var(--faint);font-size:11px}
-.result{display:none;margin-top:24px;border-top:1px solid var(--border);padding-top:26px}.result.show{display:block}.result-grid{display:grid;grid-template-columns:180px 1fr;gap:24px}.gate{border:1px solid #5b3033;background:var(--red-bg);border-radius:10px;padding:18px}.gate-label{font:600 10px/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:#ffadb1;text-transform:uppercase;letter-spacing:.1em}.gate-value{font-size:30px;font-weight:760;color:var(--red);margin:8px 0 2px}.gate p{margin:0;color:#d6aaad;font-size:12px}.finding h3{margin:0 0 8px;font-size:20px}.finding p{color:var(--muted);font-size:14px;max-width:670px}.path{margin-top:16px;border:1px solid var(--border);background:#0c0f12;border-radius:9px;padding:14px 16px;font:600 12px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace;color:#c7ced4}.path .new{color:var(--red)}.plain{margin-top:14px;padding:14px 16px;border-left:3px solid var(--red);background:#121519;color:#c8ced3;font-size:13px}.plain strong{color:var(--text)}
-.explain{padding-bottom:92px}.explain h2{font-size:32px;letter-spacing:-.035em;margin:0 0 12px}.explain>p{color:var(--muted);max-width:680px;margin:0}.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:28px}.step{border:1px solid var(--border);border-radius:10px;background:var(--panel);padding:19px}.step-num{font:600 10px/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--green);letter-spacing:.1em}.step h3{font-size:15px;margin:10px 0 7px}.step p{font-size:12px;color:var(--muted);margin:0}.local{margin-top:28px;border:1px solid var(--border);border-radius:10px;background:var(--panel);padding:20px}.local h3{margin:0 0 7px;font-size:15px}.local p{margin:0;color:var(--muted);font-size:13px}.local code{color:#c9d7ef;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
-footer{border-top:1px solid var(--border);padding:25px 0 42px;color:var(--faint);font-size:12px}.footer{display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap}
-@media(max-width:760px){.nav a:first-child{display:none}.hero{padding-top:54px}.compare{grid-template-columns:1fr}.arrow{padding:10px;transform:rotate(90deg)}.result-grid{grid-template-columns:1fr}.steps{grid-template-columns:1fr}.story{padding:20px}}
-</style>
+<title>ChangeFence — AI security from change to runtime</title>
+<meta name="description" content="ChangeFence connects change impact, targeted security testing, policy, runtime decisions, and evidence across the AI-agent lifecycle." />
+<link rel="stylesheet" href="app.css" />
 </head>
 <body>
-<header class="top"><div class="wrap"><a class="brand" href="#">ChangeFence</a><nav class="nav"><a href="#how">How it works</a><a href="https://github.com/karteekponnuru/ChangeFence">GitHub ↗</a></nav></div></header>
+<header class="top"><div class="wrap"><a class="brand" href="#">ChangeFence</a><nav class="nav"><a href="#suite">Suite</a><a href="#demo">Live results</a><a href="https://github.com/karteekponnuru/ChangeFence">GitHub ↗</a></nav></div></header>
 
 <main class="wrap">
 <section class="hero">
-  <div class="eyebrow">AI agent security</div>
-  <h1>Did this change make the agent more dangerous?</h1>
-  <p>ChangeFence compares a <strong>known-safe version</strong> of an AI agent with a <strong>proposed new version</strong> and finds dangerous capabilities that appeared because of the change.</p>
+  <div class="eyebrow">AI agent security platform</div>
+  <h1>Know what changed. Control what it enables.</h1>
+  <p>ChangeFence connects <strong>change impact</strong>, <strong>targeted security testing</strong>, <strong>policy</strong>, <strong>runtime decisions</strong>, and <strong>evidence</strong> across the AI-agent lifecycle.</p>
+  <div class="hero-actions"><a class="btn primary" href="#demo">Run real examples</a><a class="btn" href="https://github.com/karteekponnuru/ChangeFence">View source</a></div>
 </section>
 
-<section class="demo">
-  <div class="demo-head"><span>Try one example</span><span>ACME PROCUREMENT</span></div>
-  <div class="story">
-    <div class="question">A company has two AI agents. The developer makes one seemingly small change.</div>
+<div class="module-strip" aria-label="ChangeFence modules">
+  <div class="module"><b>Impact</b><span>Change → security consequence</span></div>
+  <div class="module"><b>Probe</b><span>Change-directed security tests</span></div>
+  <div class="module"><b>Policy</b><span>Reviewable control plans</span></div>
+  <div class="module"><b>Runtime</b><span>Allow · Review · Block</span></div>
+  <div class="module"><b>Ledger</b><span>Tamper-evident evidence</span></div>
+</div>
 
-    <div class="compare">
-      <div class="release">
-        <div class="release-label">Before · trusted baseline</div>
-        <h3>Procurement Agent</h3>
-        <p>Helps manage suppliers.</p>
-        <ul>
-          <li>Can read supplier records</li>
-          <li>Can update supplier information</li>
-          <li>Cannot make payments</li>
-        </ul>
-      </div>
-
-      <div class="arrow">→</div>
-
-      <div class="release">
-        <div class="release-label">After · proposed release</div>
-        <h3>Procurement Agent</h3>
-        <p>Same job, but with one new connection.</p>
-        <ul>
-          <li>Can read supplier records</li>
-          <li>Can update supplier information</li>
-          <li>Can now ask the Finance Agent to act</li>
-        </ul>
-        <div class="change">+ delegation to Finance Agent</div>
-      </div>
+<section class="section" id="demo">
+  <div class="section-head"><div><div class="truth">Engine-backed demo</div><h2>Run actual repository examples</h2></div><p>The results below are not invented in this webpage. They are JSON artifacts generated from the ChangeFence Python engine and checked for drift in CI.</p></div>
+  <div class="demo">
+    <div class="demo-top"><strong>ChangeFence Impact</strong><span class="engine-label">build_impact_report · deterministic mode</span></div>
+    <div class="scenario-tabs">
+      <button class="scenario-tab active" data-scenario="procurement-delegation">Payments</button>
+      <button class="scenario-tab" data-scenario="support-pii-export">Customer PII</button>
+      <button class="scenario-tab" data-scenario="coding-production-deploy">Production deploy</button>
+      <button class="scenario-tab" data-scenario="safe-prompt-update">Safe change</button>
     </div>
-
-    <div class="run-area">
-      <button class="run" id="run">Run ChangeFence</button>
-      <span class="hint">See what the code review does not make obvious</span>
-    </div>
-
-    <div class="result" id="result">
-      <div class="result-grid">
-        <div class="gate">
-          <div class="gate-label">Release decision</div>
-          <div class="gate-value">BLOCK</div>
-          <p>Critical security regression</p>
-        </div>
-        <div class="finding">
-          <h3>Procurement can now indirectly reach payment execution.</h3>
-          <p>The new version never directly gives Procurement permission to make a payment. But because Procurement can delegate to Finance, and Finance can execute payments, the combined system creates a new authority path.</p>
-          <div class="path">Procurement Agent<br>↓ <span class="new">NEW: delegates to Finance</span><br>Finance Agent<br>↓<br>Payment API · payment.execute</div>
-          <div class="plain"><strong>In plain English:</strong> nobody wrote “let Procurement make payments,” but the new connection makes that outcome possible. ChangeFence catches the consequence of the change, not just the changed line of code.</div>
+    <div class="demo-body">
+      <div class="scenario-intro">
+        <div class="box"><div class="label">Scenario</div><h3 id="scenarioTitle"></h3><p id="scenarioCopy"></p></div>
+        <div class="box"><div class="label">Source change</div><h3 id="scenarioDomain"></h3><div class="change-line" id="scenarioChange"></div><div class="source-links"><a id="baseLink" href="#">Baseline YAML ↗</a><a id="candidateLink" href="#">Candidate YAML ↗</a><a id="jsonLink" href="#">Engine result JSON ↗</a></div></div>
+      </div>
+      <div class="run-row"><button class="btn primary" id="runExample">Load engine result</button><div class="run-note">The browser fetches the committed result artifact for this scenario. CI regenerates it from the Python engine and fails if it differs.</div></div>
+      <div class="result" id="result" aria-live="polite">
+        <div class="result-summary">
+          <div class="decision" id="decisionCard"><div class="label">Release decision</div><div class="decision-value" id="decisionValue">—</div><small id="decisionReason"></small></div>
+          <div><h3 class="finding-title" id="findingTitle"></h3><p class="finding-copy" id="findingCopy"></p><div class="metrics" id="metrics"></div><span class="evidence" id="evidenceBadge">PROVEN</span><div class="path" id="findingPath"></div><div class="violation" id="violation"></div><div class="empty" id="emptyResult" hidden></div></div>
         </div>
       </div>
     </div>
   </div>
 </section>
 
-<section class="explain" id="how">
-  <h2>What ChangeFence does</h2>
-  <p>The product is intentionally simple: compare what the agent could do before with what it can do after the change.</p>
-  <div class="steps">
-    <div class="step"><div class="step-num">01 · COMPARE</div><h3>Before vs after</h3><p>Read the trusted agent configuration and the proposed release.</p></div>
-    <div class="step"><div class="step-num">02 · FIND</div><h3>New capabilities</h3><p>Follow tools and agent-to-agent delegation to find newly reachable actions.</p></div>
-    <div class="step"><div class="step-num">03 · GATE</div><h3>Allow or block</h3><p>Fail the release when a new capability violates a security rule.</p></div>
+<section class="section" id="suite">
+  <div class="section-head"><div><div class="truth">One lifecycle</div><h2>From PR to runtime evidence</h2></div><p>Every module shares the same security objects: capabilities, causal origin, invariants, evidence levels, and decisions.</p></div>
+  <div class="suite-grid">
+    <div class="suite-nav">
+      <button class="suite-btn active" data-module="impact"><b>Impact</b><span>What security changed?</span></button>
+      <button class="suite-btn" data-module="probe"><b>Probe</b><span>How should it be tested?</span></button>
+      <button class="suite-btn" data-module="policy"><b>Policy</b><span>What should control it?</span></button>
+      <button class="suite-btn" data-module="runtime"><b>Runtime</b><span>Should this action execute?</span></button>
+      <button class="suite-btn" data-module="ledger"><b>Ledger</b><span>What evidence do we retain?</span></button>
+    </div>
+    <div class="suite-detail" id="suiteDetail" aria-live="polite"></div>
   </div>
 
-  <div class="local">
-    <h3>Optional local AI red team</h3>
-    <p>A local model through <code>Ollama</code> can propose attack ideas privately on your machine. ChangeFence then independently verifies whether those ideas are actually possible. The AI proposes; the deterministic engine decides.</p>
+  <div class="review-example">
+    <div class="truth">Configurable human review</div>
+    <pre>reviews:
+  - id: REV-001
+    match:
+      origin: procurement
+      capability: supplier.bank_account.write
+      severity_at_least: high
+    require:
+      approver: procurement-security
+      expires_minutes: 15
+      max_uses: 1</pre>
   </div>
 </section>
 </main>
 
-<footer><div class="wrap footer"><span>ChangeFence · Open-source AI agent security</span><a href="https://github.com/karteekponnuru/ChangeFence">Source on GitHub ↗</a></div></footer>
-
-<script>
-const run=document.getElementById('run');
-const result=document.getElementById('result');
-run.addEventListener('click',()=>{
-  result.classList.add('show');
-  run.textContent='Security regression found';
-  setTimeout(()=>result.scrollIntoView({behavior:'smooth',block:'nearest'}),80);
-});
-</script>
-<!-- GitHub Pages source: main /docs -->
+<footer class="footer"><div class="wrap footer-inner"><span>ChangeFence · AI security from change to runtime</span><span><a href="https://github.com/karteekponnuru/ChangeFence">Source</a> · <a href="https://github.com/karteekponnuru/ChangeFence/tree/main/examples">Examples</a></span></div></footer>
+<script src="app.js"></script>
 </body>
 </html>
