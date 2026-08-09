@@ -1,10 +1,13 @@
 name: Test ChangeFence
+
 on:
   push:
     branches: [main]
   pull_request:
+
 permissions:
   contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -15,7 +18,20 @@ jobs:
           python-version: "3.12"
       - run: python -m pip install -e ".[dev]"
       - run: pytest
-      - name: Verify known unsafe example is blocked
+
+      - name: Verify unsafe change impact is blocked
+        shell: bash
+        run: |
+          set +e
+          changefence impact examples/procurement-base.yaml examples/procurement-candidate.yaml
+          code=$?
+          set -e
+          test "$code" -eq 1
+
+      - name: Verify safe change impact passes
+        run: changefence impact examples/procurement-base.yaml examples/procurement-safe-candidate.yaml
+
+      - name: Verify lower-level compare remains backward compatible
         shell: bash
         run: |
           set +e
@@ -23,5 +39,3 @@ jobs:
           code=$?
           set -e
           test "$code" -eq 1
-      - name: Verify safe example passes
-        run: changefence compare examples/procurement-base.yaml examples/procurement-safe-candidate.yaml
