@@ -19,7 +19,7 @@ jobs:
       - run: python -m pip install -e ".[dev]"
       - run: pytest
 
-      - name: Verify unsafe change impact is blocked
+      - name: Verify unsafe Impact example is blocked
         shell: bash
         run: |
           set +e
@@ -28,8 +28,32 @@ jobs:
           set -e
           test "$code" -eq 1
 
-      - name: Verify safe change impact passes
+      - name: Verify safe Impact example passes
         run: changefence impact examples/procurement-base.yaml examples/procurement-safe-candidate.yaml
+
+      - name: Verify Runtime review routing
+        shell: bash
+        run: |
+          set +e
+          changefence runtime examples/procurement-review.yaml procurement supplier.bank_account.write
+          code=$?
+          set -e
+          test "$code" -eq 3
+
+      - name: Verify Runtime invariant block
+        shell: bash
+        run: |
+          set +e
+          changefence runtime examples/procurement-candidate.yaml procurement payment.execute --executor finance
+          code=$?
+          set -e
+          test "$code" -eq 1
+
+      - name: Verify Policy plan generation
+        run: changefence policy examples/procurement-base.yaml examples/procurement-candidate.yaml --json
+
+      - name: Verify published demo data matches the engine
+        run: python scripts/generate_demo_results.py --check
 
       - name: Verify lower-level compare remains backward compatible
         shell: bash
