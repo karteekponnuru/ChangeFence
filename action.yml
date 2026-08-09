@@ -1,9 +1,11 @@
-name: ChangeFence Agent Security Gate
-description: Detect new AI agent authority that violates security invariants.
+name: ChangeFence Agent Security Impact
+
+description: Translate AI-agent release changes into security capability consequences.
 author: Karteek Ponnuru
+
 inputs:
   baseline:
-    description: Path to the baseline ChangeFence agent spec
+    description: Path to the approved baseline ChangeFence agent spec
     required: true
   candidate:
     description: Path to the candidate ChangeFence agent spec
@@ -12,15 +14,17 @@ inputs:
     description: Minimum invariant severity that blocks the build
     required: false
     default: high
+
 runs:
   using: composite
   steps:
     - name: Install ChangeFence
       shell: bash
       run: python3 -m pip install "$GITHUB_ACTION_PATH"
-    - name: Run agent security change gate
+    - name: Analyze agent security change impact
       shell: bash
-      run: changefence compare "${{ inputs.baseline }}" "${{ inputs.candidate }}" --fail-on "${{ inputs.fail-on }}"
+      run: changefence impact "${{ inputs.baseline }}" "${{ inputs.candidate }}" --fail-on "${{ inputs.fail-on }}"
+
 branding:
   icon: shield
   color: blue
