@@ -1,4 +1,13 @@
 {
+  "policy_ground_truth": {
+    "name": "ACME Agent Security Policy",
+    "version": "3.2",
+    "owner": "Enterprise Security",
+    "source": "Corporate Payment Control Standard",
+    "approved_by": "CISO + Finance Risk",
+    "effective_from": "2026-08-01",
+    "digest": "f1bdd1fafff99afc01be0ac8a09b628c9d209031ee0675ccfc1a20daa703934f"
+  },
   "runtime_review": {
     "decision": "REVIEW",
     "origin_agent": "procurement",
@@ -19,7 +28,16 @@
       "procurement",
       "tool:supplier",
       "cap:supplier.bank_account.write"
-    ]
+    ],
+    "policy_authority": {
+      "name": "ACME Agent Security Policy",
+      "version": "3.2",
+      "owner": "Enterprise Security",
+      "source": "Corporate Payment Control Standard",
+      "approved_by": "CISO + Finance Risk",
+      "effective_from": "2026-08-01",
+      "digest": "f1bdd1fafff99afc01be0ac8a09b628c9d209031ee0675ccfc1a20daa703934f"
+    }
   },
   "approval_lease": {
     "version": 1,
@@ -57,6 +75,15 @@
       "tool:supplier",
       "cap:supplier.bank_account.write"
     ],
+    "policy_authority": {
+      "name": "ACME Agent Security Policy",
+      "version": "3.2",
+      "owner": "Enterprise Security",
+      "source": "Corporate Payment Control Standard",
+      "approved_by": "CISO + Finance Risk",
+      "effective_from": "2026-08-01",
+      "digest": "f1bdd1fafff99afc01be0ac8a09b628c9d209031ee0675ccfc1a20daa703934f"
+    },
     "authorization": {
       "type": "APPROVAL_LEASE",
       "lease_id": "CF-APR-DEMO0001",
