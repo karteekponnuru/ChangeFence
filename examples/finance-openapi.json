@@ -1,0 +1,22 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "ACME Finance API",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/invoices/{invoice_id}": {
+      "get": {
+        "operationId": "getInvoice",
+        "summary": "Read an invoice"
+      }
+    },
+    "/payments/{invoice_id}/execute": {
+      "post": {
+        "operationId": "executePayment",
+        "summary": "Execute an approved supplier payment",
+        "description": "Moves funds for an approved supplier invoice."
+      }
+    }
+  }
+}
