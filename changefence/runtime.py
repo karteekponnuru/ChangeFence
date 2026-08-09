@@ -6,12 +6,73 @@ invariants and authority model as ChangeFence Impact.
 """
 from __future__ import annotations
 
-from .engine import analyze, index_by_pair
-from .models import SystemSpec
+from .engine import SEVERITY_RANK, analyze, index_by_pair
+from .models import ReviewRule, SystemSpec
 
 
 class RuntimeDecisionError(ValueError):
     pass
+
+
+def _capability_severity(spec: SystemSpec, capability: str) -> str | None:
+    for tool in spec.tools.values():
+        for cap in tool.capabilities:
+            if cap.name == capability:
+                return cap.severity
+    return None
+
+
+def _review_requirement(rule: ReviewRule | None, *, reason: str) -> dict:
+    if rule is None:
+        return {
+            "rule_id": "DEFAULT_REVIEW",
+            "approver": "security",
+            "expires_minutes": 15,
+            "max_uses": 1,
+            "reason": reason,
+        }
+    return {
+        "rule_id": rule.id,
+        "approver": rule.approver,
+        "expires_minutes": rule.expires_minutes,
+        "max_uses": rule.max_uses,
+        "reason": rule.reason,
+    }
+
+
+def _matching_review_rule(
+    spec: SystemSpec,
+    *,
+    origin_agent: str,
+    capability: str,
+    severity: str,
+    evidence: str,
+) -> ReviewRule | None:
+    matches = []
+    for rule in spec.review_rules:
+        if rule.origin_agent not in {"*", origin_agent}:
+            continue
+        if rule.capability not in {"*", capability}:
+            continue
+        if rule.evidence not in {"*", evidence}:
+            continue
+        if SEVERITY_RANK[severity] < SEVERITY_RANK[rule.severity_at_least]:
+            continue
+        matches.append(rule)
+    if not matches:
+        return None
+    # Prefer the most specific and most security-sensitive matching rule.
+    matches.sort(
+        key=lambda rule: (
+            rule.origin_agent != "*",
+            rule.capability != "*",
+            rule.evidence != "*",
+            SEVERITY_RANK[rule.severity_at_least],
+            -rule.expires_minutes,
+        ),
+        reverse=True,
+    )
+    return matches[0]
 
 
 def decide_action(
@@ -23,10 +84,11 @@ def decide_action(
 ) -> dict:
     """Return ALLOW, REVIEW, or BLOCK before a security-relevant action executes.
 
-    BLOCK is reserved for an explicit invariant violation. REVIEW is used when
-    ChangeFence cannot establish that the requested capability is represented and
-    reachable in the current model. This prevents model incompleteness from being
-    mislabeled as either authorization or malicious behavior.
+    Precedence is deliberate:
+    1. explicit invariant -> BLOCK
+    2. unknown/unmodeled authority -> REVIEW
+    3. configured review rule -> REVIEW
+    4. modeled reachable authority -> ALLOW
     """
     origin_agent = str(origin_agent).strip()
     capability = str(capability).strip()
@@ -56,23 +118,23 @@ def decide_action(
                 "description": inv.description,
                 "severity": inv.severity,
             },
+            "review": None,
             "evidence_level": "PROVEN",
             "path": [],
         }
 
-    known_capabilities = {
-        cap.name
-        for tool in spec.tools.values()
-        for cap in tool.capabilities
-    }
-    if capability not in known_capabilities:
+    severity = _capability_severity(spec, capability)
+    if severity is None:
+        reason = "Capability is not represented in the current ChangeFence model."
         return {
             "decision": "REVIEW",
             "origin_agent": origin_agent,
             "executor_agent": executor_agent,
             "capability": capability,
-            "reason": "Capability is not represented in the current ChangeFence model.",
+            "severity": None,
+            "reason": reason,
             "invariant": None,
+            "review": _review_requirement(None, reason=reason),
             "evidence_level": "UNKNOWN",
             "path": [],
         }
@@ -80,15 +142,39 @@ def decide_action(
     reachable = index_by_pair(analyze(spec))
     item = reachable.get((origin_agent, capability))
     if not item:
+        reason = "Capability exists in the model but is not declared reachable from the causal origin."
         return {
             "decision": "REVIEW",
             "origin_agent": origin_agent,
             "executor_agent": executor_agent,
             "capability": capability,
-            "reason": "Capability exists in the model but is not declared reachable from the causal origin.",
+            "severity": severity,
+            "reason": reason,
             "invariant": None,
+            "review": _review_requirement(None, reason=reason),
             "evidence_level": "PROVEN",
             "path": [],
+        }
+
+    rule = _matching_review_rule(
+        spec,
+        origin_agent=origin_agent,
+        capability=capability,
+        severity=severity,
+        evidence="PROVEN",
+    )
+    if rule:
+        return {
+            "decision": "REVIEW",
+            "origin_agent": origin_agent,
+            "executor_agent": executor_agent,
+            "capability": capability,
+            "severity": severity,
+            "reason": rule.reason,
+            "invariant": None,
+            "review": _review_requirement(rule, reason=rule.reason),
+            "evidence_level": "PROVEN",
+            "path": list(item.path),
         }
 
     return {
@@ -96,8 +182,10 @@ def decide_action(
         "origin_agent": origin_agent,
         "executor_agent": executor_agent,
         "capability": capability,
-        "reason": "Capability is modeled as reachable and no configured invariant forbids it.",
+        "severity": severity,
+        "reason": "Capability is modeled as reachable and no configured invariant or review rule restricts it.",
         "invariant": None,
+        "review": None,
         "evidence_level": "PROVEN",
         "path": list(item.path),
     }
