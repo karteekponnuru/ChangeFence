@@ -74,9 +74,7 @@ The browser demo presents the same analysis as a product workflow rather than a 
 - customer-data exfiltration across agents
 - coding-agent access to production deployment
 
-Once GitHub Pages is enabled for this repository, the demo is published at:
-
-`https://karteekponnuru.github.io/ChangeFence/`
+Demo: `https://karteekponnuru.github.io/ChangeFence/`
 
 The source for the demo is in [`docs/index.html`](docs/index.html).
 
@@ -111,7 +109,35 @@ tool_authority_escalation        100%       40%         REGRESSION
 
 The agent framework is responsible for executing scenarios. ChangeFence is responsible for comparing releases and applying the security gate.
 
-### 3. Deterministic release gate
+### 3. Local AI red-team hypotheses
+
+ChangeFence can optionally use a **local LLM through Ollama** to propose attack hypotheses without sending the agent architecture to a hosted model.
+
+The model is the explorer, not the judge:
+
+```text
+Local LLM
+   ↓ proposes attack hypotheses
+ChangeFence deterministic verifier
+   ├─ VERIFIED_NEW
+   ├─ VERIFIED_EXISTING
+   └─ UNREACHABLE
+```
+
+If the model invents a path that the candidate cannot actually reach, ChangeFence rejects it as `UNREACHABLE`. The model never decides whether the release gate passes.
+
+Run the local hypothesis engine:
+
+```bash
+changefence hypothesize \
+  examples/procurement-base.yaml \
+  examples/procurement-candidate.yaml \
+  --model gemma3
+```
+
+See [`docs/local-llm.md`](docs/local-llm.md) for the design and setup.
+
+### 4. Deterministic release gate
 
 Security invariants are evaluated outside the LLM.
 
@@ -205,24 +231,26 @@ invariants:
 ## Architecture
 
 ```text
-Baseline system ─┐
-                 ├─> Capability graph ─> Reachability diff ─┐
-Candidate system ┘                                          │
-                                                            ├─> Security gate
-Behavior baseline ─┐                                        │
-                   ├─> Behavioral regression diff ──────────┘
+Local LLM ───────> attack hypotheses ───────┐
+                                            ↓
+Baseline system ─┐                    deterministic
+                 ├─> capability graph ─> verification ─┐
+Candidate system ┘                                     │
+                                                       ├─> security gate
+Behavior baseline ─┐                                   │
+                   ├─> behavioral regression diff ─────┘
 Behavior candidate ┘
 ```
 
 ## Repository structure
 
 ```text
-changefence/          analysis engine and CLI
-docs/                 interactive browser product demo
+changefence/          analysis engine, local hypothesis engine, and CLI
+docs/                 interactive browser product demo and design notes
 examples/             baseline/candidate systems and behavior results
 tests/                automated regression tests
 action.yml            reusable GitHub security gate
-.github/workflows/    CI and Pages deployment
+.github/workflows/    CI
 ```
 
 ## Current scope
