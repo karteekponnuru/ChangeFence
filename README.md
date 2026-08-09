@@ -7,13 +7,23 @@
 [![CI](https://github.com/karteekponnuru/ChangeFence/actions/workflows/ci.yml/badge.svg)](https://github.com/karteekponnuru/ChangeFence/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-555.svg)](LICENSE)
 
-ChangeFence is an open-source AI-agent security suite built around one shared security model: **capabilities, causal origin, invariants, evidence, and decisions**.
+ChangeFence is an open-source AI-agent security suite built around one shared security model: **capabilities, causal origin, invariants, evidence, review, and runtime decisions**.
 
-It starts with the question that created the project:
+It connects the security lifecycle:
 
-> **What new security authority did this change create, and why?**
-
-and carries that result into targeted testing, control recommendations, runtime decisions, and evidence retention.
+```text
+change
+  ↓
+Impact
+  ↓
+Probe
+  ↓
+Policy
+  ↓
+Runtime ── REVIEW ── Approval Lease
+  ↓
+Ledger
+```
 
 **Live engine-backed demo:** `https://karteekponnuru.github.io/ChangeFence/`
 
@@ -21,13 +31,15 @@ and carries that result into targeted testing, control recommendations, runtime 
 
 | Module | Question | Current capability |
 |---|---|---|
-| **Impact** | What security changed? | Structural capability delta, invariant impact, semantic LLM analysis, PR decision |
+| **Impact** | What security changed? | Capability delta, invariant impact, semantic LLM analysis, PR decision |
 | **Probe** | How should the new risk be tested? | Local Ollama hypotheses + change-directed Promptfoo export |
 | **Policy** | What control should mitigate it? | Reviewable control plans derived from proven Impact findings |
-| **Runtime** | Should this action execute? | Deterministic `ALLOW`, `REVIEW`, `BLOCK` hook for custom/local agents |
+| **Runtime** | Should this action execute? | Deterministic `ALLOW`, `REVIEW`, `BLOCK` + signed approval leases |
 | **Ledger** | What evidence do we retain? | Hash-chained tamper-evident JSONL evidence |
 
-ChangeFence does **not** try to replace cloud-native IAM, AWS AgentCore Policy, Google Agent Gateway, Promptfoo, LangSmith, or existing observability systems. It can feed or complement those systems while retaining one security story across the lifecycle.
+ChangeFence does **not** try to replace cloud-native IAM, cloud agent gateways, generic eval frameworks, or observability systems. It provides the security intelligence and evidence that connects those layers.
+
+---
 
 ## Impact: your code diff is not your agent diff
 
@@ -64,6 +76,16 @@ FIN-001: Procurement must never gain authority to execute payments.
 
 The developer never directly granted `payment.execute` to Procurement. The graph reveals the transitive consequence.
 
+### Run Impact
+
+```bash
+changefence impact \
+  examples/procurement-base.yaml \
+  examples/procurement-candidate.yaml
+```
+
+---
+
 ## Evidence contract
 
 ChangeFence separates facts from AI-assisted inference.
@@ -72,16 +94,18 @@ ChangeFence separates facts from AI-assisted inference.
 Derived deterministically from declared architecture and reachability.
 
 ### `HYPOTHESIZED`
-Proposed by the semantic LLM layer from concrete repository/API/tool evidence. Requires review or runtime verification.
+Proposed by the semantic LLM layer from repository/API/tool evidence. Requires review or runtime verification.
 
 ### `VERIFIED`
 Reserved for evidence returned by an external execution/evaluation system.
 
 The LLM never upgrades its own inference to `PROVEN` or `VERIFIED`.
 
+---
+
 ## Semantic LLM layer
 
-Real repositories do not contain perfect labels such as `payment.execute`. They contain names like:
+Real repositories rarely use perfect labels such as `payment.execute`. They contain names like:
 
 ```text
 process_payment
@@ -90,7 +114,7 @@ POST /payments/{id}/execute
 finance_mcp
 ```
 
-The optional local LLM layer translates messy implementation details into reviewable capability proposals. OpenAPI/Swagger and MCP-style descriptors can be supplied as grounding context.
+The optional local LLM layer translates those implementation details into reviewable capability proposals. OpenAPI/Swagger and MCP-style descriptors can be supplied as grounding context.
 
 ```bash
 changefence impact \
@@ -105,9 +129,11 @@ changefence impact \
 
 Unknown tools, malformed capabilities, invented agents, and generated tests outside the actual change impact are discarded.
 
+---
+
 ## Probe: change-directed security testing
 
-Probe uses the security consequence found by Impact as the target for local LLM hypothesis generation.
+Probe uses the consequence found by Impact as the target for local LLM hypothesis generation.
 
 ```text
 PR change
@@ -118,7 +144,16 @@ PR change
    -> runtime evidence
 ```
 
-ChangeFence does not pretend that hypothesis generation is a security verdict. The model proposes; deterministic analysis and external execution provide evidence.
+The model proposes. Deterministic analysis and external execution provide evidence.
+
+```bash
+changefence hypothesize \
+  examples/procurement-base.yaml \
+  examples/procurement-candidate.yaml \
+  --model gemma3
+```
+
+---
 
 ## Policy: turn findings into reviewable controls
 
@@ -128,11 +163,12 @@ changefence policy \
   examples/procurement-candidate.yaml
 ```
 
-A proven violation can produce a plan such as:
+A proven violation can generate a reviewable plan such as:
 
 ```text
 Intent: Prevent procurement from causing payment.execute.
 Triggered by: FIN-001
+
 Options:
 - remove or narrow the authority edge
 - require explicit human approval
@@ -141,9 +177,11 @@ Options:
 
 Policy recommendations are never silently deployed.
 
-## Runtime: ALLOW, REVIEW, or BLOCK
+---
 
-Runtime is a small pre-action decision hook for custom/local agents. Cloud-hosted systems should normally use their native enforcement mechanisms.
+# Runtime: ALLOW, REVIEW, BLOCK
+
+Runtime is a small pre-action decision hook for custom/local agents.
 
 Decision precedence:
 
@@ -171,7 +209,7 @@ Reviewer: procurement-security
 Approval: 1 use, expires in 15 minutes
 ```
 
-### Configure human review
+## Configure human review
 
 ```yaml
 reviews:
@@ -187,11 +225,114 @@ reviews:
       reason: Human approval required for sensitive supplier-bank changes.
 ```
 
-The host system is responsible for authenticating the human reviewer. ChangeFence defines **when review is required, who should approve, and the intended approval scope**. A review can never override a hard security invariant.
+A review can never override a hard security invariant.
+
+---
+
+# Runtime approval leases
+
+A configured `REVIEW` can be satisfied with a **signed, short-lived, scoped approval lease** after a trusted host authenticates the reviewer.
+
+The lease is bound to:
+
+- the review-rule ID
+- authenticated reviewer identity and group
+- causal origin
+- optional executor
+- exact capability
+- evidence level
+- exact modeled authority-path hash
+- issue/expiry time
+- maximum uses
+- optional PR/ticket/request context
+
+## 1. Configure the signing key
+
+Use a secret manager in production. The key must be at least 32 bytes.
+
+```bash
+export CHANGEFENCE_APPROVAL_SECRET='replace-with-a-secret-from-your-secret-manager'
+```
+
+The signing key is read from an environment variable so it does not need to appear in shell history.
+
+## 2. Trusted host authenticates the reviewer
+
+ChangeFence does not pretend to authenticate the human itself. A GitHub integration, Slack workflow, internal approval service, or other trusted host must establish the human identity and reviewer group first.
+
+Anyone with access to `CHANGEFENCE_APPROVAL_SECRET` is a trusted issuer.
+
+## 3. Issue the lease
+
+```bash
+changefence approve \
+  examples/procurement-review.yaml \
+  procurement \
+  supplier.bank_account.write \
+  --approved-by alice@example.com \
+  --approver-group procurement-security \
+  --context '{"pr":284,"ticket":"SEC-91"}' \
+  --out approval.json \
+  --ledger security-evidence.jsonl
+```
+
+## 4. Verify without spending it
+
+```bash
+changefence approval-verify \
+  examples/procurement-review.yaml \
+  procurement \
+  supplier.bank_account.write \
+  approval.json
+```
+
+## 5. Consume at runtime
+
+```bash
+changefence runtime \
+  examples/procurement-review.yaml \
+  procurement \
+  supplier.bank_account.write \
+  --lease approval.json \
+  --usage-store .changefence/approval-usage.json \
+  --ledger security-evidence.jsonl
+```
+
+A valid lease changes the result to:
+
+```text
+Decision: ALLOW
+Authorization: APPROVAL_LEASE
+Approved by: alice@example.com
+Remaining uses: 0
+```
+
+### Replay protection
+
+The usage store is signed and updated under an atomic lock/recheck. Two concurrent callers racing a one-use lease cannot both consume it. Tampering with the usage store causes the lease to fail closed.
+
+### Topology binding
+
+The lease includes a hash of the exact authority path that was reviewed. If the agent topology changes before execution, the lease no longer matches and Runtime returns to `REVIEW`.
+
+### What cannot be approved around
+
+A lease cannot bypass:
+
+- an explicit `BLOCK` invariant
+- unknown/unmodeled authority
+- a different origin, executor, capability, reviewer group, or rule
+- expiration or exhausted uses
+- an invalid signature
+- a changed authority path
+
+Detailed design: [`docs/approval-leases.md`](docs/approval-leases.md)
+
+---
 
 ## Ledger: retain the evidence
 
-Append a security event:
+Append an event:
 
 ```bash
 changefence ledger-append evidence.jsonl impact \
@@ -204,13 +345,15 @@ Verify the chain:
 changefence ledger-verify evidence.jsonl
 ```
 
-Each record includes the previous record hash. Tampering with an earlier event breaks verification.
+Approval issuance and successful lease consumption can also be written to the Ledger. Each record includes the previous record hash, so changing earlier evidence breaks verification.
+
+---
 
 ## Real demo results, not hard-coded screenshots
 
-The GitHub Pages demo loads result JSON under `docs/demo-data/`.
+The GitHub Pages demo loads JSON under `docs/demo-data/`.
 
-Those artifacts are generated by:
+Those artifacts are generated by the real engines:
 
 ```bash
 python scripts/generate_demo_results.py
@@ -222,17 +365,20 @@ CI runs:
 python scripts/generate_demo_results.py --check
 ```
 
-and fails if the published demo data differs from what the current engine generates.
+and fails if the published demo data differs from current engine output.
 
-Current reproducible scenarios include:
+Reproducible examples include:
 
 - Procurement delegation → `payment.execute` → **BLOCK**
 - Support delegation → `customer.pii.export` → **BLOCK**
 - Coding agent receives deploy tool → `production.deploy` → **BLOCK**
 - Prompt-only change with unchanged authority → **PASS**
-- Sensitive supplier-bank update review rule → **REVIEW**
+- Sensitive supplier-bank update → **REVIEW**
+- Signed one-use approval lease consumed → **ALLOW**
 
-All scenario inputs are committed under `examples/`.
+The public Runtime tab lets you switch from the actual pre-approval `REVIEW` result to the engine-generated approved execution result.
+
+---
 
 ## GitHub Action
 
@@ -247,6 +393,8 @@ All scenario inputs are committed under `examples/`.
 
 The Action blocks only on a newly introduced deterministic authority path that violates a configured invariant at or above the selected severity. LLM-assisted findings are surfaced for review instead of autonomously blocking the build.
 
+---
+
 ## Core commands
 
 ```bash
@@ -255,6 +403,20 @@ changefence impact BASELINE CANDIDATE
 
 # Runtime decision
 changefence runtime SPEC ORIGIN CAPABILITY [--executor AGENT]
+
+# Issue a signed review lease
+changefence approve SPEC ORIGIN CAPABILITY \
+  --approved-by USER \
+  --approver-group GROUP \
+  --out approval.json
+
+# Validate without consuming
+changefence approval-verify SPEC ORIGIN CAPABILITY approval.json
+
+# Consume a lease during Runtime authorization
+changefence runtime SPEC ORIGIN CAPABILITY \
+  --lease approval.json \
+  --usage-store .changefence/approval-usage.json
 
 # Reviewable policy plan
 changefence policy BASELINE CANDIDATE
@@ -269,6 +431,8 @@ changefence ledger-verify LEDGER
 
 Lower-level primitives such as `compare`, `behavior-diff`, and `report` remain available for compatibility.
 
+---
+
 ## Repository structure
 
 ```text
@@ -279,7 +443,8 @@ changefence/
   descriptors.py     OpenAPI / MCP grounding
   hypotheses.py      Probe hypothesis engine
   policy.py          reviewable control recommendations
-  runtime.py         ALLOW / REVIEW / BLOCK hook
+  runtime.py         ALLOW / REVIEW / BLOCK + lease authorization
+  approvals.py       signed scoped approval leases + replay protection
   ledger.py          tamper-evident evidence chain
   cli.py             command-line suite
 
@@ -287,8 +452,9 @@ docs/
   index.html         interactive product demo
   app.css / app.js   public demo UI
   demo-data/         engine-generated result artifacts
+  approval-leases.md approval trust model and integration guide
 examples/            reproducible security scenarios
-tests/               deterministic, LLM-boundary, runtime, policy and ledger tests
+tests/               deterministic, LLM-boundary, runtime, approval, policy and ledger tests
 scripts/             demo artifact generator
 action.yml           reusable GitHub PR/release gate
 ```
@@ -297,7 +463,7 @@ action.yml           reusable GitHub PR/release gate
 
 ChangeFence only makes deterministic authority claims about capabilities and relationships it can model. Dynamic runtime-only authority, undocumented side effects, arbitrary credential discovery, and environment-specific behavior require runtime or external evidence.
 
-`Runtime` is currently a decision hook for custom/local systems, not a universal network gateway. `Policy` produces reviewable plans rather than silently changing production controls. `Probe` uses local LLMs for hypotheses rather than verdicts.
+`Runtime` is currently a decision/authorization hook for custom/local systems, not a universal network gateway. Approval identity is authenticated by the integrating host, not by ChangeFence itself. `Policy` produces reviewable plans rather than silently changing production controls. `Probe` uses local LLMs for hypotheses rather than verdicts.
 
 These boundaries are intentional.
 
