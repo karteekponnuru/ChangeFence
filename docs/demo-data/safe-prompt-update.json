@@ -1,0 +1,31 @@
+{
+  "scenario": "safe-prompt-update",
+  "title": "Prompt-only safe change",
+  "domain": "Control",
+  "change": "prompt_id updated; authority unchanged",
+  "plain_english": "The prompt reference changed, but no new modeled capability or forbidden path was introduced.",
+  "base_file": "examples/procurement-base.yaml",
+  "candidate_file": "examples/procurement-safe-candidate.yaml",
+  "result": {
+    "decision": "PASS",
+    "decision_reason": "No modeled security consequence crossed the configured threshold.",
+    "summary": {
+      "structural_changes": 1,
+      "proven_new_capabilities": 0,
+      "inferred_new_capabilities": 0,
+      "semantic_risks": 0,
+      "targeted_tests": 0,
+      "gate_violations": 0
+    },
+    "proven_findings": [],
+    "gate_violations": [],
+    "structural_changes": [
+      {"type": "prompt_changed", "agent": "procurement", "before": "procurement-safe", "after": "procurement-revised", "risk": "review"}
+    ],
+    "evidence_contract": {
+      "PROVEN": "Derived deterministically from declared architecture and reachability.",
+      "HYPOTHESIZED": "LLM-assisted semantic inference; requires human review or runtime verification.",
+      "VERIFIED": "Reserved for evidence returned by an external execution/evaluation harness."
+    }
+  }
+}
