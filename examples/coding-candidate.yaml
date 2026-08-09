@@ -1,0 +1,25 @@
+system: acme-coding-candidate
+
+agents:
+  coding:
+    model: gpt-enterprise
+    prompt_id: coding-safe
+    tools: [repo, deploy]
+
+tools:
+  repo:
+    capabilities:
+      - {name: code.read, severity: low}
+      - {name: code.write, severity: medium}
+  deploy:
+    capabilities:
+      - {name: deployment.read, severity: low}
+      - {name: production.deploy, severity: critical}
+
+invariants:
+  - id: PROD-201
+    severity: critical
+    description: Coding agents must never gain authority to deploy to production.
+    forbid_reachability:
+      from: coding
+      to: production.deploy
