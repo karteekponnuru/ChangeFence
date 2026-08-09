@@ -1,0 +1,26 @@
+{
+  "tools": [
+    {
+      "name": "get_invoice",
+      "description": "Read supplier invoice details.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "invoice_id": {"type": "string"}
+        },
+        "required": ["invoice_id"]
+      }
+    },
+    {
+      "name": "process_payment",
+      "description": "Execute payment for an approved supplier invoice.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "invoice_id": {"type": "string"}
+        },
+        "required": ["invoice_id"]
+      }
+    }
+  ]
+}
