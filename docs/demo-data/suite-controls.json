@@ -1,0 +1,78 @@
+{
+  "runtime_review": {
+    "decision": "REVIEW",
+    "origin_agent": "procurement",
+    "executor_agent": null,
+    "capability": "supplier.bank_account.write",
+    "severity": "high",
+    "reason": "Human approval required for sensitive supplier-bank changes.",
+    "invariant": null,
+    "review": {
+      "rule_id": "REV-001",
+      "approver": "procurement-security",
+      "expires_minutes": 15,
+      "max_uses": 1,
+      "reason": "Human approval required for sensitive supplier-bank changes."
+    },
+    "evidence_level": "PROVEN",
+    "path": [
+      "procurement",
+      "tool:supplier",
+      "cap:supplier.bank_account.write"
+    ]
+  },
+  "policy_plan": {
+    "product": "ChangeFence Policy",
+    "base": "acme-procurement-baseline",
+    "candidate": "acme-procurement-candidate",
+    "source_decision": "BLOCK",
+    "recommendations": [
+      {
+        "id": "CF-POL-001",
+        "status": "REVIEW_REQUIRED",
+        "severity": "critical",
+        "intent": "Prevent procurement from causing payment.execute.",
+        "causal_origin": "procurement",
+        "capability": "payment.execute",
+        "triggered_by_invariant": "FIN-001",
+        "evidence_path": [
+          "procurement",
+          "delegate:finance",
+          "finance",
+          "tool:payments",
+          "cap:payment.execute"
+        ],
+        "control_options": [
+          "Remove or narrow the authority edge that introduced the path.",
+          "Require explicit human approval before the sensitive capability executes.",
+          "Add a runtime deny rule for this causal-origin/capability combination."
+        ],
+        "enforcement_targets": [
+          "ChangeFence Runtime for custom/local agents",
+          "AWS AgentCore Policy for AWS-hosted agent gateways",
+          "Google Agent Gateway / governance controls for Google-hosted agents"
+        ],
+        "auto_deploy": false
+      }
+    ],
+    "summary": {
+      "recommendations": 1
+    },
+    "safety_contract": "Policy plans are recommendations for review; ChangeFence does not silently deploy generated controls."
+  },
+  "probe": {
+    "status": "LOCAL_MODEL_REQUIRED",
+    "engine": "Ollama",
+    "primary_command": "changefence impact ... --llm --promptfoo-out changefence-tests.yaml",
+    "claim": "Change-directed hypotheses are generated locally and remain HYPOTHESIZED until an external harness runs them."
+  },
+  "ledger": {
+    "status": "AVAILABLE",
+    "format": "hash-chained JSONL",
+    "commands": [
+      "changefence ledger-append",
+      "changefence ledger-verify"
+    ],
+    "claim": "Impact and runtime decisions can be recorded in a tamper-evident local evidence chain."
+  }
+}
