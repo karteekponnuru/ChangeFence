@@ -40,7 +40,47 @@ jobs:
           set -e
           test "$code" -eq 3
 
-      - name: Verify Runtime invariant block
+      - name: Verify signed one-use approval lease lifecycle
+        shell: bash
+        env:
+          CHANGEFENCE_APPROVAL_SECRET: changefence-ci-secret-that-is-longer-than-thirty-two-bytes
+        run: |
+          rm -f /tmp/changefence-approval.json /tmp/changefence-usage.json
+          changefence approve \
+            examples/procurement-review.yaml \
+            procurement \
+            supplier.bank_account.write \
+            --approved-by ci-reviewer@example.com \
+            --approver-group procurement-security \
+            --context '{"workflow":"ci"}' \
+            --out /tmp/changefence-approval.json
+
+          changefence approval-verify \
+            examples/procurement-review.yaml \
+            procurement \
+            supplier.bank_account.write \
+            /tmp/changefence-approval.json \
+            --usage-store /tmp/changefence-usage.json
+
+          changefence runtime \
+            examples/procurement-review.yaml \
+            procurement \
+            supplier.bank_account.write \
+            --lease /tmp/changefence-approval.json \
+            --usage-store /tmp/changefence-usage.json
+
+          set +e
+          changefence runtime \
+            examples/procurement-review.yaml \
+            procurement \
+            supplier.bank_account.write \
+            --lease /tmp/changefence-approval.json \
+            --usage-store /tmp/changefence-usage.json
+          code=$?
+          set -e
+          test "$code" -eq 3
+
+      - name: Verify Runtime invariant block cannot be approved around
         shell: bash
         run: |
           set +e
