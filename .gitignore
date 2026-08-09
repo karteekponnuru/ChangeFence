@@ -6,5 +6,7 @@ venv/
 dist/
 build/
 *.egg-info/
+.changefence/
+changefence-approval.json
 changefence-report.html
 .DS_Store
