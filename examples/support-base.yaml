@@ -1,0 +1,29 @@
+system: acme-support-baseline
+
+agents:
+  support:
+    model: gemini-enterprise
+    prompt_id: support-safe
+    tools: [crm]
+  analytics:
+    model: gemini-enterprise
+    prompt_id: analytics-safe
+    tools: [analytics]
+
+tools:
+  crm:
+    capabilities:
+      - {name: customer.profile.read, severity: low}
+      - {name: ticket.write, severity: medium}
+  analytics:
+    capabilities:
+      - {name: analytics.query, severity: low}
+      - {name: customer.pii.export, severity: critical}
+
+invariants:
+  - id: DATA-101
+    severity: critical
+    description: Support must never gain authority to export customer PII.
+    forbid_reachability:
+      from: support
+      to: customer.pii.export
