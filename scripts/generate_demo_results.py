@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the GitHub Pages demo artifacts from the real ChangeFence engine."""
+"""Generate the GitHub Pages demo artifacts from the real ChangeFence engines."""
 from __future__ import annotations
 
 import argparse
@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 
 from changefence.impact import build_impact_report
+from changefence.policy import build_policy_plan
+from changefence.runtime import decide_action
 from changefence.spec import load_spec
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -48,7 +50,7 @@ SCENARIOS = {
 }
 
 
-def render(slug: str, config: dict) -> str:
+def _impact_payload(slug: str, config: dict) -> str:
     base = load_spec(ROOT / config["base_file"])
     candidate = load_spec(ROOT / config["candidate_file"])
     report = build_impact_report(base, candidate, use_llm=False)
@@ -65,15 +67,48 @@ def render(slug: str, config: dict) -> str:
     return json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
 
 
+def _suite_controls_payload() -> str:
+    reviewed = load_spec(ROOT / "examples/procurement-review.yaml")
+    runtime_review = decide_action(
+        reviewed,
+        origin_agent="procurement",
+        capability="supplier.bank_account.write",
+    )
+    base = load_spec(ROOT / "examples/procurement-base.yaml")
+    candidate = load_spec(ROOT / "examples/procurement-candidate.yaml")
+    impact = build_impact_report(base, candidate, use_llm=False)
+    policy = build_policy_plan(impact)
+    payload = {
+        "runtime_review": runtime_review,
+        "policy_plan": policy,
+        "probe": {
+            "status": "LOCAL_MODEL_REQUIRED",
+            "engine": "Ollama",
+            "primary_command": "changefence impact ... --llm --promptfoo-out changefence-tests.yaml",
+            "claim": "Change-directed hypotheses are generated locally and remain HYPOTHESIZED until an external harness runs them."
+        },
+        "ledger": {
+            "status": "AVAILABLE",
+            "format": "hash-chained JSONL",
+            "commands": ["changefence ledger-append", "changefence ledger-verify"],
+            "claim": "Impact and runtime decisions can be recorded in a tamper-evident local evidence chain."
+        }
+    }
+    return json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true", help="Fail if committed demo data differs from engine output")
     args = parser.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
+    expected_files = {
+        **{f"{slug}.json": _impact_payload(slug, config) for slug, config in SCENARIOS.items()},
+        "suite-controls.json": _suite_controls_payload(),
+    }
     drift = []
-    for slug, config in SCENARIOS.items():
-        path = OUT / f"{slug}.json"
-        expected = render(slug, config)
+    for filename, expected in expected_files.items():
+        path = OUT / filename
         if args.check:
             actual = path.read_text(encoding="utf-8") if path.exists() else ""
             if actual != expected:
