@@ -1,3 +1,15 @@
-"""ChangeFence: security change control for AI agents."""
+"""ChangeFence: AI security from change impact to runtime evidence."""
 
-__all__ = ["engine", "behavior", "spec", "report"]
+__all__ = [
+    "engine",
+    "impact",
+    "semantic",
+    "descriptors",
+    "hypotheses",
+    "policy",
+    "runtime",
+    "ledger",
+    "behavior",
+    "spec",
+    "report",
+]
