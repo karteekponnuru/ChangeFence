@@ -1,0 +1,23 @@
+system: acme-procurement-candidate
+
+# Developer-owned agent architecture. This PR adds a Finance handoff.
+agents:
+  procurement:
+    model: gemini-enterprise
+    prompt_id: procurement-with-finance-handoff
+    tools: [supplier]
+    delegates_to: [finance]
+  finance:
+    model: gemini-enterprise
+    prompt_id: finance-safe
+    tools: [payments]
+
+tools:
+  supplier:
+    capabilities:
+      - {name: supplier.read, severity: low}
+      - {name: supplier.bank_account.write, severity: high}
+  payments:
+    capabilities:
+      - {name: invoice.read, severity: low}
+      - {name: payment.execute, severity: critical}
