@@ -26,8 +26,12 @@ def _render_path(path):
     return " -> ".join(path)
 
 
-def _load_compare(base, candidate, fail_on):
-    return compare(load_spec(base), load_spec(candidate), fail_on=fail_on)
+def _load(path, policy=None):
+    return load_spec(path, policy_path=policy)
+
+
+def _load_compare(base, candidate, fail_on, policy=None):
+    return compare(_load(base, policy), _load(candidate, policy), fail_on=fail_on)
 
 
 def _read_optional(path):
@@ -50,6 +54,15 @@ def _json_object(value, *, label):
     if not isinstance(parsed, dict):
         raise ApprovalLeaseError(f"{label} must be a JSON object.")
     return parsed
+
+
+def _print_policy_authority(authority):
+    if not authority:
+        return
+    print(
+        f"Policy:     {authority['name']} v{authority['version']} "
+        f"· owner={authority['owner']} · sha256={authority['digest'][:12]}…"
+    )
 
 
 def _print_structural(report):
@@ -87,6 +100,7 @@ def _print_impact(report):
     print("CHANGEFENCE IMPACT")
     print(f"Baseline:  {report['base']}")
     print(f"Candidate: {report['candidate']}")
+    _print_policy_authority(report.get("policy_authority"))
     print(f"Decision:  {report['decision']}")
     print(f"Reason:    {report['decision_reason']}")
     s = report["summary"]
@@ -123,6 +137,7 @@ def _print_runtime(decision):
     print(f"Decision:   {decision['decision']}")
     print(f"Origin:     {decision['origin_agent']}")
     print(f"Capability: {decision['capability']}")
+    _print_policy_authority(decision.get("policy_authority"))
     print(f"Reason:     {decision['reason']}")
     if decision.get("review"):
         review = decision["review"]
@@ -136,6 +151,16 @@ def _print_runtime(decision):
         print(f"Lease:      INVALID · {decision['lease_validation']['reason']}")
 
 
+def _add_policy_arg(parser):
+    parser.add_argument(
+        "--policy",
+        help=(
+            "Security-owned policy registry YAML. When supplied, its invariants/reviews "
+            "replace any rules embedded in developer-controlled agent specs."
+        ),
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(prog="changefence", description="AI security from change impact to runtime evidence")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -144,6 +169,7 @@ def main():
     cmp_parser.add_argument("base")
     cmp_parser.add_argument("candidate")
     cmp_parser.add_argument("--fail-on", choices=["low", "medium", "high", "critical"], default="high")
+    _add_policy_arg(cmp_parser)
     cmp_parser.add_argument("--json", action="store_true", dest="as_json")
 
     impact_parser = sub.add_parser("impact", help="Translate an agent change into security consequences")
@@ -159,6 +185,7 @@ def main():
     impact_parser.add_argument("--attacks", type=int, default=6)
     impact_parser.add_argument("--fail-on", choices=["low", "medium", "high", "critical"], default="high")
     impact_parser.add_argument("--promptfoo-out", help="Write generated targeted tests as Promptfoo external-tests YAML")
+    _add_policy_arg(impact_parser)
     impact_parser.add_argument("--json", action="store_true", dest="as_json")
 
     runtime_parser = sub.add_parser("runtime", help="Evaluate a security-relevant action before execution")
@@ -166,6 +193,7 @@ def main():
     runtime_parser.add_argument("origin")
     runtime_parser.add_argument("capability")
     runtime_parser.add_argument("--executor")
+    _add_policy_arg(runtime_parser)
     runtime_parser.add_argument("--lease", help="Signed approval lease JSON to consume when the action requires REVIEW")
     runtime_parser.add_argument("--usage-store", default=".changefence/approval-usage.json", help="Signed replay/usage state for approval leases")
     runtime_parser.add_argument("--secret-env", default="CHANGEFENCE_APPROVAL_SECRET", help="Environment variable containing the approval signing secret")
@@ -177,6 +205,7 @@ def main():
     approve_parser.add_argument("origin")
     approve_parser.add_argument("capability")
     approve_parser.add_argument("--executor")
+    _add_policy_arg(approve_parser)
     approve_parser.add_argument("--approved-by", required=True, help="Authenticated human identity supplied by the trusted host")
     approve_parser.add_argument("--approver-group", required=True, help="Authenticated reviewer group/role supplied by the trusted host")
     approve_parser.add_argument("--context", help="Optional JSON object, for example '{\"pr\":284,\"ticket\":\"SEC-91\"}'")
@@ -190,6 +219,7 @@ def main():
     approval_verify.add_argument("capability")
     approval_verify.add_argument("lease")
     approval_verify.add_argument("--executor")
+    _add_policy_arg(approval_verify)
     approval_verify.add_argument("--usage-store", default=".changefence/approval-usage.json")
     approval_verify.add_argument("--secret-env", default="CHANGEFENCE_APPROVAL_SECRET")
     approval_verify.add_argument("--json", action="store_true", dest="as_json")
@@ -198,6 +228,7 @@ def main():
     policy_parser.add_argument("base")
     policy_parser.add_argument("candidate")
     policy_parser.add_argument("--fail-on", choices=["low", "medium", "high", "critical"], default="high")
+    _add_policy_arg(policy_parser)
     policy_parser.add_argument("--json", action="store_true", dest="as_json")
 
     ledger_append = sub.add_parser("ledger-append", help="Append a security event to the tamper-evident ledger")
@@ -223,6 +254,7 @@ def main():
     report_parser.add_argument("--fail-on", choices=["low", "medium", "high", "critical"], default="high")
     report_parser.add_argument("--threshold", type=float, default=0.20)
     report_parser.add_argument("--out", default="changefence-report.html")
+    _add_policy_arg(report_parser)
 
     hyp_parser = sub.add_parser("hypothesize", help="Generate local-LLM attack hypotheses and verify them deterministically")
     hyp_parser.add_argument("base")
@@ -231,18 +263,19 @@ def main():
     hyp_parser.add_argument("--url", default="http://localhost:11434")
     hyp_parser.add_argument("--count", type=int, default=6)
     hyp_parser.add_argument("--timeout", type=int, default=120)
+    _add_policy_arg(hyp_parser)
     hyp_parser.add_argument("--json", action="store_true", dest="as_json")
 
     args = parser.parse_args()
     try:
         if args.command == "compare":
-            report = _load_compare(args.base, args.candidate, args.fail_on)
+            report = _load_compare(args.base, args.candidate, args.fail_on, args.policy)
             print(json.dumps(report, indent=2)) if args.as_json else _print_structural(report)
             raise SystemExit(1 if report["status"] == "FAIL" else 0)
 
         if args.command == "impact":
-            base = load_spec(args.base)
-            candidate = load_spec(args.candidate)
+            base = _load(args.base, args.policy)
+            candidate = _load(args.candidate, args.policy)
             report = build_impact_report(
                 base,
                 candidate,
@@ -262,7 +295,7 @@ def main():
             raise SystemExit(1 if report["decision"] == "BLOCK" else 0)
 
         if args.command == "runtime":
-            spec = load_spec(args.spec)
+            spec = _load(args.spec, args.policy)
             lease = _read_json_file(args.lease) if args.lease else None
             secret = secret_from_env(args.secret_env) if lease else None
             decision = authorize_action(
@@ -283,6 +316,7 @@ def main():
                         "origin_agent": decision["origin_agent"],
                         "executor_agent": decision.get("executor_agent"),
                         "capability": decision["capability"],
+                        "policy_authority": decision.get("policy_authority"),
                         "authorization": decision["authorization"],
                     },
                 )
@@ -290,7 +324,7 @@ def main():
             raise SystemExit(1 if decision["decision"] == "BLOCK" else 3 if decision["decision"] == "REVIEW" else 0)
 
         if args.command == "approve":
-            spec = load_spec(args.spec)
+            spec = _load(args.spec, args.policy)
             decision = decide_action(
                 spec,
                 origin_agent=args.origin,
@@ -314,16 +348,16 @@ def main():
                     payload={key: value for key, value in lease.items() if key != "signature"},
                 )
             print("CHANGEFENCE APPROVAL")
-            print(f"Lease:      {lease['lease_id']}")
-            print(f"Approved by:{lease['approved_by']}")
-            print(f"Scope:      {lease['origin_agent']} -> {lease['capability']}")
-            print(f"Expires:    {lease['expires_at']}")
-            print(f"Max uses:   {lease['max_uses']}")
-            print(f"Written:    {args.out}")
+            print(f"Lease:       {lease['lease_id']}")
+            print(f"Approved by: {lease['approved_by']}")
+            print(f"Scope:       {lease['origin_agent']} -> {lease['capability']}")
+            print(f"Expires:     {lease['expires_at']}")
+            print(f"Max uses:    {lease['max_uses']}")
+            print(f"Written:     {args.out}")
             raise SystemExit(0)
 
         if args.command == "approval-verify":
-            spec = load_spec(args.spec)
+            spec = _load(args.spec, args.policy)
             decision = decide_action(
                 spec,
                 origin_agent=args.origin,
@@ -343,12 +377,17 @@ def main():
             raise SystemExit(0 if result["valid"] else 1)
 
         if args.command == "policy":
-            report = build_impact_report(load_spec(args.base), load_spec(args.candidate), fail_on=args.fail_on)
+            report = build_impact_report(
+                _load(args.base, args.policy),
+                _load(args.candidate, args.policy),
+                fail_on=args.fail_on,
+            )
             plan = build_policy_plan(report)
             if args.as_json:
                 print(json.dumps(plan, indent=2))
             else:
                 print("CHANGEFENCE POLICY")
+                _print_policy_authority(report.get("policy_authority"))
                 print(f"Recommendations: {plan['summary']['recommendations']}")
                 for item in plan["recommendations"]:
                     print(f"- [{item['severity'].upper()}] {item['intent']}")
@@ -377,8 +416,8 @@ def main():
             raise SystemExit(1 if report["status"] == "FAIL" else 0)
 
         if args.command == "hypothesize":
-            base = load_spec(args.base)
-            candidate = load_spec(args.candidate)
+            base = _load(args.base, args.policy)
+            candidate = _load(args.candidate, args.policy)
             report = generate_attack_hypotheses(base, candidate, model=args.model, count=args.count, base_url=args.url, timeout=args.timeout)
             if args.as_json:
                 print(json.dumps(report, indent=2))
@@ -397,7 +436,7 @@ def main():
             raise SystemExit(0)
 
         if args.command == "report":
-            structural = _load_compare(args.base, args.candidate, args.fail_on)
+            structural = _load_compare(args.base, args.candidate, args.fail_on, args.policy)
             behavior = None
             if bool(args.behavior_base) != bool(args.behavior_candidate):
                 parser.error("--behavior-base and --behavior-candidate must be provided together")
@@ -407,6 +446,7 @@ def main():
             print(f"ChangeFence report written to {path}")
             combined_fail = structural["status"] == "FAIL" or (behavior and behavior["status"] == "FAIL")
             raise SystemExit(1 if combined_fail else 0)
+
     except (
         SpecError,
         BehaviorError,
