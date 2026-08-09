@@ -69,13 +69,16 @@ def _impact_payload(slug: str, config: dict) -> str:
     result = {
         "decision": report["decision"],
         "decision_reason": report["decision_reason"],
-        "policy_authority": report.get("policy_authority"),
+    }
+    if report.get("policy_authority"):
+        result["policy_authority"] = report["policy_authority"]
+    result.update({
         "summary": report["summary"],
         "proven_findings": report["proven_findings"],
         "gate_violations": report["structural"]["gate_violations"],
         "structural_changes": report["structural"]["structural_diff"]["changes"],
         "evidence_contract": report["evidence_contract"],
-    }
+    })
     payload = {"scenario": slug, **config, "result": result}
     return json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
 
