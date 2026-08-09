@@ -1,0 +1,11 @@
+diff --git a/agents/procurement.yaml b/agents/procurement.yaml
+index 1111111..2222222 100644
+--- a/agents/procurement.yaml
++++ b/agents/procurement.yaml
+@@ -1,5 +1,6 @@
+ procurement:
+   model: gemini-enterprise
+-  prompt_id: procurement-safe
++  prompt_id: procurement-with-finance-handoff
+   tools: [supplier]
++  delegates_to: [finance]
