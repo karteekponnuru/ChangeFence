@@ -8,7 +8,10 @@ from .descriptors import DescriptorError, build_descriptor_context
 from .engine import compare
 from .hypotheses import HypothesisError, generate_attack_hypotheses
 from .impact import build_impact_report, write_promptfoo_tests
+from .ledger import LedgerError, append_event, verify_ledger
+from .policy import build_policy_plan
 from .report import write_html
+from .runtime import RuntimeDecisionError, decide_action
 from .semantic import SemanticError
 from .spec import SpecError, load_spec
 
@@ -53,7 +56,7 @@ def _print_behavior(report):
 
 
 def _print_impact(report):
-    print("CHANGEFENCE SECURITY CHANGE IMPACT")
+    print("CHANGEFENCE IMPACT")
     print(f"Baseline:  {report['base']}")
     print(f"Candidate: {report['candidate']}")
     print(f"Decision:  {report['decision']}")
@@ -94,7 +97,7 @@ def _read_optional(path):
 
 
 def main():
-    parser = argparse.ArgumentParser(prog="changefence", description="Security change control for AI agents")
+    parser = argparse.ArgumentParser(prog="changefence", description="AI security from change impact to runtime evidence")
     sub = parser.add_subparsers(dest="command", required=True)
 
     cmp_parser = sub.add_parser("compare", help="Compare baseline and candidate agent authority")
@@ -117,6 +120,28 @@ def main():
     impact_parser.add_argument("--fail-on", choices=["low", "medium", "high", "critical"], default="high")
     impact_parser.add_argument("--promptfoo-out", help="Write generated targeted tests as Promptfoo external-tests YAML")
     impact_parser.add_argument("--json", action="store_true", dest="as_json")
+
+    runtime_parser = sub.add_parser("runtime", help="Evaluate a security-relevant action before execution")
+    runtime_parser.add_argument("spec")
+    runtime_parser.add_argument("origin")
+    runtime_parser.add_argument("capability")
+    runtime_parser.add_argument("--executor")
+    runtime_parser.add_argument("--json", action="store_true", dest="as_json")
+
+    policy_parser = sub.add_parser("policy", help="Generate reviewable control recommendations from an Impact report")
+    policy_parser.add_argument("base")
+    policy_parser.add_argument("candidate")
+    policy_parser.add_argument("--fail-on", choices=["low", "medium", "high", "critical"], default="high")
+    policy_parser.add_argument("--json", action="store_true", dest="as_json")
+
+    ledger_append = sub.add_parser("ledger-append", help="Append a security event to the tamper-evident ledger")
+    ledger_append.add_argument("ledger")
+    ledger_append.add_argument("event_type")
+    ledger_append.add_argument("payload", help="JSON object containing the evidence payload")
+
+    ledger_verify = sub.add_parser("ledger-verify", help="Verify the tamper-evident evidence ledger")
+    ledger_verify.add_argument("ledger")
+    ledger_verify.add_argument("--json", action="store_true", dest="as_json")
 
     beh_parser = sub.add_parser("behavior-diff", help="Compare adversarial test results between releases")
     beh_parser.add_argument("base")
@@ -148,6 +173,7 @@ def main():
             report = _load_compare(args.base, args.candidate, args.fail_on)
             print(json.dumps(report, indent=2)) if args.as_json else _print_structural(report)
             raise SystemExit(1 if report["status"] == "FAIL" else 0)
+
         if args.command == "impact":
             base = load_spec(args.base)
             candidate = load_spec(args.candidate)
@@ -168,10 +194,62 @@ def main():
                 report["promptfoo_tests_file"] = str(path)
             print(json.dumps(report, indent=2)) if args.as_json else _print_impact(report)
             raise SystemExit(1 if report["decision"] == "BLOCK" else 0)
+
+        if args.command == "runtime":
+            decision = decide_action(
+                load_spec(args.spec),
+                origin_agent=args.origin,
+                executor_agent=args.executor,
+                capability=args.capability,
+            )
+            if args.as_json:
+                print(json.dumps(decision, indent=2))
+            else:
+                print("CHANGEFENCE RUNTIME")
+                print(f"Decision:   {decision['decision']}")
+                print(f"Origin:     {decision['origin_agent']}")
+                print(f"Capability: {decision['capability']}")
+                print(f"Reason:     {decision['reason']}")
+                if decision.get("review"):
+                    review = decision["review"]
+                    print(f"Reviewer:   {review['approver']}")
+                    print(f"Approval:   {review['max_uses']} use(s), expires in {review['expires_minutes']} minutes")
+            raise SystemExit(1 if decision["decision"] == "BLOCK" else 3 if decision["decision"] == "REVIEW" else 0)
+
+        if args.command == "policy":
+            report = build_impact_report(load_spec(args.base), load_spec(args.candidate), fail_on=args.fail_on)
+            plan = build_policy_plan(report)
+            if args.as_json:
+                print(json.dumps(plan, indent=2))
+            else:
+                print("CHANGEFENCE POLICY")
+                print(f"Recommendations: {plan['summary']['recommendations']}")
+                for item in plan["recommendations"]:
+                    print(f"- [{item['severity'].upper()}] {item['intent']}")
+                    print(f"  invariant: {item['triggered_by_invariant']}")
+                    print("  status: REVIEW_REQUIRED")
+            raise SystemExit(0)
+
+        if args.command == "ledger-append":
+            payload = json.loads(args.payload)
+            if not isinstance(payload, dict):
+                raise LedgerError("Ledger payload must be a JSON object.")
+            record = append_event(args.ledger, event_type=args.event_type, payload=payload)
+            print(json.dumps(record, indent=2))
+            raise SystemExit(0)
+
+        if args.command == "ledger-verify":
+            result = verify_ledger(args.ledger)
+            print(json.dumps(result, indent=2)) if args.as_json else print(
+                f"CHANGEFENCE LEDGER: {'VALID' if result['valid'] else 'INVALID'} · records={result['records']}"
+            )
+            raise SystemExit(0 if result["valid"] else 1)
+
         if args.command == "behavior-diff":
             report = compare_behavior(args.base, args.candidate, threshold=args.threshold)
             print(json.dumps(report, indent=2)) if args.as_json else _print_behavior(report)
             raise SystemExit(1 if report["status"] == "FAIL" else 0)
+
         if args.command == "hypothesize":
             base = load_spec(args.base)
             candidate = load_spec(args.candidate)
@@ -179,7 +257,7 @@ def main():
             if args.as_json:
                 print(json.dumps(report, indent=2))
             else:
-                print("CHANGEFENCE LOCAL ATTACK HYPOTHESES")
+                print("CHANGEFENCE PROBE · LOCAL ATTACK HYPOTHESES")
                 print(f"Model: {report['model']}")
                 print(f"Generated: {report['summary']['generated']}")
                 print(f"Verified new: {report['summary']['verified_new']}")
@@ -191,6 +269,7 @@ def main():
                     if h["evidence_path"]:
                         print(f"Verified path: {_render_path(h['evidence_path'])}")
             raise SystemExit(0)
+
         if args.command == "report":
             structural = _load_compare(args.base, args.candidate, args.fail_on)
             behavior = None
@@ -202,7 +281,7 @@ def main():
             print(f"ChangeFence report written to {path}")
             combined_fail = structural["status"] == "FAIL" or (behavior and behavior["status"] == "FAIL")
             raise SystemExit(1 if combined_fail else 0)
-    except (SpecError, BehaviorError, HypothesisError, SemanticError, DescriptorError, OSError) as exc:
+    except (SpecError, BehaviorError, HypothesisError, SemanticError, DescriptorError, RuntimeDecisionError, LedgerError, json.JSONDecodeError, OSError) as exc:
         print(f"ChangeFence error: {exc}", file=sys.stderr)
         raise SystemExit(2)
 
