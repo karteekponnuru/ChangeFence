@@ -18,15 +18,17 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "docs" / "demo-data"
 DEMO_SECRET = "changefence-demo-only-secret-not-for-production-2026"
 DEMO_TIME = datetime(2026, 8, 9, 22, 30, tzinfo=timezone.utc)
+ENTERPRISE_POLICY = "examples/acme-security-policy.yaml"
 
 SCENARIOS = {
     "procurement-delegation": {
         "title": "Procurement → payment execution",
         "domain": "Finance",
         "change": "+ delegation to Finance Agent",
-        "plain_english": "A new delegation edge lets Procurement reach Finance capabilities, including payment execution.",
-        "base_file": "examples/procurement-base.yaml",
-        "candidate_file": "examples/procurement-candidate.yaml",
+        "plain_english": "A developer only added a Finance handoff. ChangeFence discovered that this also makes payment execution reachable from Procurement.",
+        "base_file": "examples/procurement-agents-base.yaml",
+        "candidate_file": "examples/procurement-agents-candidate.yaml",
+        "policy_file": ENTERPRISE_POLICY,
     },
     "support-pii-export": {
         "title": "Support → customer PII export",
@@ -55,13 +57,19 @@ SCENARIOS = {
 }
 
 
+def _load(path: str, policy_file: str | None = None):
+    return load_spec(ROOT / path, policy_path=(ROOT / policy_file) if policy_file else None)
+
+
 def _impact_payload(slug: str, config: dict) -> str:
-    base = load_spec(ROOT / config["base_file"])
-    candidate = load_spec(ROOT / config["candidate_file"])
+    policy_file = config.get("policy_file")
+    base = _load(config["base_file"], policy_file)
+    candidate = _load(config["candidate_file"], policy_file)
     report = build_impact_report(base, candidate, use_llm=False)
     result = {
         "decision": report["decision"],
         "decision_reason": report["decision_reason"],
+        "policy_authority": report.get("policy_authority"),
         "summary": report["summary"],
         "proven_findings": report["proven_findings"],
         "gate_violations": report["structural"]["gate_violations"],
@@ -73,7 +81,7 @@ def _impact_payload(slug: str, config: dict) -> str:
 
 
 def _suite_controls_payload() -> str:
-    reviewed = load_spec(ROOT / "examples/procurement-review.yaml")
+    reviewed = _load("examples/procurement-agents-base.yaml", ENTERPRISE_POLICY)
     runtime_review = decide_action(
         reviewed,
         origin_agent="procurement",
@@ -100,11 +108,12 @@ def _suite_controls_payload() -> str:
             now=DEMO_TIME + timedelta(minutes=1),
         )
 
-    base = load_spec(ROOT / "examples/procurement-base.yaml")
-    candidate = load_spec(ROOT / "examples/procurement-candidate.yaml")
+    base = _load("examples/procurement-agents-base.yaml", ENTERPRISE_POLICY)
+    candidate = _load("examples/procurement-agents-candidate.yaml", ENTERPRISE_POLICY)
     impact = build_impact_report(base, candidate, use_llm=False)
     policy = build_policy_plan(impact)
     payload = {
+        "policy_ground_truth": impact.get("policy_authority"),
         "runtime_review": runtime_review,
         "approval_lease": {
             **{key: value for key, value in lease.items() if key != "signature"},
