@@ -25,6 +25,10 @@ dev = ["pytest>=8.0", "fastapi>=0.116,<1", "httpx>=0.28,<1"]
 [project.scripts]
 changefence = "changefence.cli:main"
 
+[tool.setuptools.packages.find]
+include = ["changefence*"]
+exclude = ["playground*", "docs*", "tests*", "examples*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
