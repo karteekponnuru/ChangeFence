@@ -20,7 +20,13 @@
     "proven_findings": [],
     "gate_violations": [],
     "structural_changes": [
-      {"type": "prompt_changed", "agent": "procurement", "before": "procurement-safe", "after": "procurement-revised", "risk": "review"}
+      {
+        "type": "prompt_changed",
+        "agent": "procurement",
+        "before": "procurement-safe",
+        "after": "procurement-revised",
+        "risk": "review"
+      }
     ],
     "evidence_contract": {
       "PROVEN": "Derived deterministically from declared architecture and reachability.",
