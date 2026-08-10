@@ -3,6 +3,12 @@ let lastResult = null;
 
 const $ = (id) => document.getElementById(id);
 
+function esc(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  })[char]);
+}
+
 async function api(path, body) {
   const response = await fetch(path, {
     method: body ? "POST" : "GET",
@@ -27,11 +33,12 @@ function candidateForToggle(enabled) {
 }
 
 function decisionClass(decision) {
-  return String(decision || "neutral").toLowerCase();
+  const value = String(decision || "neutral").toLowerCase();
+  return ["block", "review", "pass", "allow", "neutral"].includes(value) ? value : "neutral";
 }
 
 function plainToken(token) {
-  return token.replace(/^agent:/, "").replace(/^tool:/, "").replace(/^cap:/, "");
+  return String(token).replace(/^agent:/, "").replace(/^tool:/, "").replace(/^cap:/, "");
 }
 
 function pathNodeIds(path) {
@@ -100,14 +107,15 @@ function renderGraph(result) {
     el.className = `graph-node ${node.type}${hot ? " hot" : ""}`;
     el.style.left = `${pos.x}px`;
     el.style.top = `${pos.y}px`;
-    el.innerHTML = `<strong>${plainToken(node.label)}</strong><small>${hot && node.type === "capability" ? "new authority" : node.type}${node.severity ? ` · ${node.severity}` : ""}</small>`;
+    el.innerHTML = `<strong>${esc(plainToken(node.label))}</strong><small>${hot && node.type === "capability" ? "new authority" : esc(node.type)}${node.severity ? ` · ${esc(node.severity)}` : ""}</small>`;
     canvas.appendChild(el);
   }
 
   const narrative = $("pathNarrative");
   if (result.primary_path?.length) {
+    const pathText = result.primary_path.map(plainToken).filter((x, i, arr) => !x.startsWith("delegate:") && (i === 0 || x !== arr[i - 1])).join(" → ");
     narrative.hidden = false;
-    narrative.innerHTML = `<strong>Effective authority path:</strong> ${result.primary_path.map(plainToken).filter((x, i, arr) => !x.startsWith("delegate:") && (i === 0 || x !== arr[i - 1])).join(" → ")}`;
+    narrative.innerHTML = `<strong>Effective authority path:</strong> ${esc(pathText)}`;
   } else narrative.hidden = true;
 }
 
@@ -136,7 +144,7 @@ function renderDecision(result) {
     result.new_capabilities.forEach((cap) => {
       const row = document.createElement("div");
       row.className = `new-cap ${cap.severity}`;
-      row.innerHTML = `<span>${cap.capability}</span><em>${cap.evidence_level} · ${cap.severity}</em>`;
+      row.innerHTML = `<span>${esc(cap.capability)}</span><em>${esc(cap.evidence_level)} · ${esc(cap.severity)}</em>`;
       capList.appendChild(row);
     });
   } else capBox.hidden = true;
@@ -180,13 +188,13 @@ function renderEditorResult(result) {
   const violation = result.violations?.[0];
   box.innerHTML = `
     <div class="card-label">RESULT</div>
-    <h3><span class="decision-badge ${decisionClass(result.decision)}">${result.decision}</span></h3>
-    <p class="muted">${result.reason}</p>
-    ${violation ? `<p><strong>${violation.id}</strong> · ${violation.description}</p>` : ""}
+    <h3><span class="decision-badge ${decisionClass(result.decision)}">${esc(result.decision)}</span></h3>
+    <p class="muted">${esc(result.reason)}</p>
+    ${violation ? `<p><strong>${esc(violation.id)}</strong> · ${esc(violation.description)}</p>` : ""}
     <div class="result-grid">
-      <div class="result-metric"><strong>${result.summary.structural_changes}</strong><span>STRUCTURAL CHANGES</span></div>
-      <div class="result-metric"><strong>${result.summary.proven_new_capabilities}</strong><span>NEW CAPABILITIES</span></div>
-      <div class="result-metric"><strong>${result.summary.gate_violations}</strong><span>POLICY VIOLATIONS</span></div>
+      <div class="result-metric"><strong>${Number(result.summary.structural_changes) || 0}</strong><span>STRUCTURAL CHANGES</span></div>
+      <div class="result-metric"><strong>${Number(result.summary.proven_new_capabilities) || 0}</strong><span>NEW CAPABILITIES</span></div>
+      <div class="result-metric"><strong>${Number(result.summary.gate_violations) || 0}</strong><span>POLICY VIOLATIONS</span></div>
     </div>`;
 }
 
@@ -204,7 +212,7 @@ $("editorRun").addEventListener("click", async () => {
     status.textContent = `Policy: ${result.policy_authority?.name || "external policy"}`;
   } catch (error) {
     $("editorResult").hidden = false;
-    $("editorResult").innerHTML = `<div class="decision-badge block">INVALID INPUT</div><p class="muted">${error.message}</p>`;
+    $("editorResult").innerHTML = `<div class="decision-badge block">INVALID INPUT</div><p class="muted">${esc(error.message)}</p>`;
     status.textContent = "";
   }
 });
@@ -229,13 +237,13 @@ $("runtimeRun").addEventListener("click", async () => {
       executor_agent: capability === "payment.execute" && origin === "procurement" ? "finance" : null,
     });
     box.innerHTML = `
-      <div class="big-decision ${decisionClass(result.decision)}">${result.decision}</div>
-      <p>${result.reason}</p>
-      ${result.review ? `<p><strong>Reviewer:</strong> ${result.review.approver}<br><strong>Lease:</strong> ${result.review.max_uses} use · ${result.review.expires_minutes} minutes</p>` : ""}
-      ${result.invariant ? `<p><strong>${result.invariant.id}</strong> · ${result.invariant.description}</p>` : ""}
-      ${result.path?.length ? `<p><strong>Path:</strong> ${result.path.map(plainToken).join(" → ")}</p>` : ""}`;
+      <div class="big-decision ${decisionClass(result.decision)}">${esc(result.decision)}</div>
+      <p>${esc(result.reason)}</p>
+      ${result.review ? `<p><strong>Reviewer:</strong> ${esc(result.review.approver)}<br><strong>Lease:</strong> ${Number(result.review.max_uses) || 0} use · ${Number(result.review.expires_minutes) || 0} minutes</p>` : ""}
+      ${result.invariant ? `<p><strong>${esc(result.invariant.id)}</strong> · ${esc(result.invariant.description)}</p>` : ""}
+      ${result.path?.length ? `<p><strong>Path:</strong> ${esc(result.path.map(plainToken).join(" → "))}</p>` : ""}`;
   } catch (error) {
-    box.innerHTML = `<div class="big-decision block">ERROR</div><p>${error.message}</p>`;
+    box.innerHTML = `<div class="big-decision block">ERROR</div><p>${esc(error.message)}</p>`;
   }
 });
 
@@ -250,7 +258,6 @@ async function init() {
     return;
   }
 
-  // Start with a clean baseline graph so the dangerous path appears only after the visitor changes the system.
   try {
     const initial = await api("/api/analyze", {
       baseline: examples.baseline,
