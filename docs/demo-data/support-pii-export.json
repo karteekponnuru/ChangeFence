@@ -25,7 +25,13 @@
         "source_agent": "support",
         "capability": "analytics.query",
         "severity": "low",
-        "path": ["support", "delegate:analytics", "analytics", "tool:analytics", "cap:analytics.query"],
+        "path": [
+          "support",
+          "delegate:analytics",
+          "analytics",
+          "tool:analytics",
+          "cap:analytics.query"
+        ],
         "reason": "Deterministically reachable in candidate and not reachable in baseline."
       },
       {
@@ -35,7 +41,13 @@
         "source_agent": "support",
         "capability": "customer.pii.export",
         "severity": "critical",
-        "path": ["support", "delegate:analytics", "analytics", "tool:analytics", "cap:customer.pii.export"],
+        "path": [
+          "support",
+          "delegate:analytics",
+          "analytics",
+          "tool:analytics",
+          "cap:customer.pii.export"
+        ],
         "reason": "Deterministically reachable in candidate and not reachable in baseline."
       }
     ],
@@ -46,12 +58,23 @@
         "source_agent": "support",
         "capability": "customer.pii.export",
         "severity": "critical",
-        "path": ["support", "delegate:analytics", "analytics", "tool:analytics", "cap:customer.pii.export"],
+        "path": [
+          "support",
+          "delegate:analytics",
+          "analytics",
+          "tool:analytics",
+          "cap:customer.pii.export"
+        ],
         "new_in_candidate": true
       }
     ],
     "structural_changes": [
-      {"type": "delegation_added", "agent": "support", "target": "analytics", "risk": "high"}
+      {
+        "type": "delegation_added",
+        "agent": "support",
+        "target": "analytics",
+        "risk": "high"
+      }
     ],
     "evidence_contract": {
       "PROVEN": "Derived deterministically from declared architecture and reachability.",

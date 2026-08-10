@@ -25,7 +25,11 @@
         "source_agent": "coding",
         "capability": "deployment.read",
         "severity": "low",
-        "path": ["coding", "tool:deploy", "cap:deployment.read"],
+        "path": [
+          "coding",
+          "tool:deploy",
+          "cap:deployment.read"
+        ],
         "reason": "Deterministically reachable in candidate and not reachable in baseline."
       },
       {
@@ -35,7 +39,11 @@
         "source_agent": "coding",
         "capability": "production.deploy",
         "severity": "critical",
-        "path": ["coding", "tool:deploy", "cap:production.deploy"],
+        "path": [
+          "coding",
+          "tool:deploy",
+          "cap:production.deploy"
+        ],
         "reason": "Deterministically reachable in candidate and not reachable in baseline."
       }
     ],
@@ -46,12 +54,21 @@
         "source_agent": "coding",
         "capability": "production.deploy",
         "severity": "critical",
-        "path": ["coding", "tool:deploy", "cap:production.deploy"],
+        "path": [
+          "coding",
+          "tool:deploy",
+          "cap:production.deploy"
+        ],
         "new_in_candidate": true
       }
     ],
     "structural_changes": [
-      {"type": "tool_added", "agent": "coding", "tool": "deploy", "risk": "review"}
+      {
+        "type": "tool_added",
+        "agent": "coding",
+        "tool": "deploy",
+        "risk": "review"
+      }
     ],
     "evidence_contract": {
       "PROVEN": "Derived deterministically from declared architecture and reachability.",

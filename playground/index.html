@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#080b10" />
+  <title>ChangeFence Playground</title>
+  <meta name="description" content="Change an AI agent and see what security authority changes with it." />
+  <link rel="stylesheet" href="/assets/app.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">ChangeFence<span class="brand-dot">.</span></a>
+    <div class="top-actions">
+      <span class="engine-badge"><span class="pulse"></span> Real engine</span>
+      <a class="ghost-link" href="https://github.com/karteekponnuru/ChangeFence">GitHub ↗</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="kicker">AI AGENT SECURITY PLAYGROUND</div>
+      <h1>Make one small agent change.<br><span>See what it really enables.</span></h1>
+      <p>ChangeFence compares the agent system before and after a change, follows indirect authority, and checks the result against security-owned ground truth.</p>
+      <div class="hero-proof">
+        <span>Deterministic authority analysis</span>
+        <span>Separate policy ground truth</span>
+        <span>ALLOW · REVIEW · BLOCK</span>
+      </div>
+    </section>
+
+    <nav class="mode-tabs" aria-label="Playground mode">
+      <button class="tab active" data-mode="guided">Guided demo</button>
+      <button class="tab" data-mode="editor">Try your own YAML</button>
+      <button class="tab" data-mode="runtime">Runtime check</button>
+    </nav>
+
+    <section id="guided" class="mode-panel active">
+      <div class="story-strip">
+        <div><span class="step-num">01</span><strong>Developer change</strong><small>Procurement can ask Finance for help.</small></div>
+        <div><span class="step-num">02</span><strong>Hidden consequence</strong><small>Finance already has payment authority.</small></div>
+        <div><span class="step-num">03</span><strong>Security truth</strong><small>FIN-001 forbids Procurement-caused payments.</small></div>
+      </div>
+
+      <div class="workspace">
+        <aside class="control-card card">
+          <div class="card-label">CHANGE THE SYSTEM</div>
+          <h2>Procurement Agent</h2>
+          <p class="muted">It can already read and update supplier records.</p>
+
+          <div class="cap-list">
+            <div class="cap-row"><span class="cap-dot safe"></span><span>supplier.read</span><em>low</em></div>
+            <div class="cap-row"><span class="cap-dot review"></span><span>supplier.bank_account.write</span><em>high</em></div>
+          </div>
+
+          <div class="toggle-box">
+            <div>
+              <strong>Delegate to Finance</strong>
+              <small>Developer wants Finance to help with invoice questions.</small>
+            </div>
+            <label class="switch" aria-label="Delegate Procurement to Finance">
+              <input id="delegationToggle" type="checkbox" />
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <div class="intent-note">
+            <span>Developer intent</span>
+            “Let Procurement ask Finance for invoice help.”
+          </div>
+          <button id="guidedRun" class="primary-btn">Analyze change</button>
+        </aside>
+
+        <section class="graph-card card">
+          <div class="graph-head">
+            <div><div class="card-label">AUTHORITY MAP</div><h2>What can Procurement ultimately cause?</h2></div>
+            <span id="graphLegend" class="legend-pill">Baseline</span>
+          </div>
+          <div id="graphEmpty" class="graph-empty">
+            <div class="empty-orb"></div>
+            <strong>Start with the approved baseline.</strong>
+            <span>Turn on the Finance delegation, then run ChangeFence.</span>
+          </div>
+          <div id="graphCanvas" class="graph-canvas" hidden></div>
+          <div id="pathNarrative" class="path-narrative" hidden></div>
+        </section>
+
+        <aside class="decision-card card" id="decisionCard">
+          <div class="card-label">CHANGEFENCE DECISION</div>
+          <div id="decisionBadge" class="decision-badge neutral">READY</div>
+          <h2 id="decisionTitle">No change analyzed yet</h2>
+          <p id="decisionReason" class="muted">Change the agent and run the analysis.</p>
+
+          <div id="policyEvidence" class="policy-evidence" hidden>
+            <div class="policy-top"><span>Ground truth</span><strong id="policyVersion"></strong></div>
+            <div id="policyRule" class="policy-rule"></div>
+            <div class="policy-meta" id="policyMeta"></div>
+          </div>
+
+          <div id="newCaps" class="new-caps" hidden>
+            <div class="section-mini-title">New authority</div>
+            <div id="newCapsList"></div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section id="editor" class="mode-panel">
+      <div class="editor-intro">
+        <div><div class="kicker">YOUR SYSTEM</div><h2>Paste an agent system and its security policy.</h2></div>
+        <p>The policy is loaded separately and is authoritative. Rules embedded in the agent files are ignored when an external policy is supplied.</p>
+      </div>
+      <div class="editor-grid">
+        <div class="editor-card card"><div class="editor-head"><span>Baseline</span><button data-load="baseline">Reset</button></div><textarea id="baselineEditor" spellcheck="false"></textarea></div>
+        <div class="editor-card card"><div class="editor-head"><span>Candidate</span><button data-load="candidate">Reset</button></div><textarea id="candidateEditor" spellcheck="false"></textarea></div>
+        <div class="editor-card card policy-editor"><div class="editor-head"><span>Security policy · ground truth</span><button data-load="policy">Reset</button></div><textarea id="policyEditor" spellcheck="false"></textarea></div>
+      </div>
+      <div class="editor-actions">
+        <button id="editorRun" class="primary-btn">Run ChangeFence</button>
+        <span id="editorStatus" class="muted"></span>
+      </div>
+      <div id="editorResult" class="editor-result card" hidden></div>
+    </section>
+
+    <section id="runtime" class="mode-panel">
+      <div class="runtime-layout">
+        <div class="runtime-copy">
+          <div class="kicker">LIVE ACTION GATE</div>
+          <h2>What should happen before the agent uses a sensitive capability?</h2>
+          <p>Pick an action. ChangeFence checks the same security-owned policy at runtime and returns <strong>ALLOW</strong>, <strong>REVIEW</strong>, or <strong>BLOCK</strong>.</p>
+          <div class="runtime-flow"><span>Agent wants action</span><b>→</b><span>ChangeFence</span><b>→</b><span>Tool executes only if allowed</span></div>
+        </div>
+        <div class="runtime-card card">
+          <label>Origin agent<select id="runtimeOrigin"><option value="procurement">Procurement</option><option value="finance">Finance</option></select></label>
+          <label>Capability<select id="runtimeCapability"><option value="supplier.read">Read supplier</option><option value="supplier.bank_account.write">Update supplier bank account</option><option value="payment.execute">Execute payment</option></select></label>
+          <button id="runtimeRun" class="primary-btn">Check action</button>
+          <div id="runtimeResult" class="runtime-result" hidden></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="how-it-fits">
+      <div class="kicker">HOW AN ENTERPRISE USES IT</div>
+      <h2>The same ground truth follows the agent from change to runtime.</h2>
+      <div class="fit-grid">
+        <div class="fit-card"><span>01</span><strong>Developers change agents</strong><p>Tools, prompts, models and delegation evolve normally.</p></div>
+        <div class="fit-card"><span>02</span><strong>Security owns policy</strong><p>A separately protected registry defines what must block or require review.</p></div>
+        <div class="fit-card"><span>03</span><strong>CI checks the change</strong><p>ChangeFence finds newly reachable authority before deployment.</p></div>
+        <div class="fit-card"><span>04</span><strong>Runtime checks actions</strong><p>Sensitive live actions are evaluated against the same security truth.</p></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span>© 2026 Karteek Ponnuru · ChangeFence</span>
+    <span>Your code diff is not your agent diff.</span>
+  </footer>
+
+  <script src="/assets/app.js"></script>
+</body>
+</html>
